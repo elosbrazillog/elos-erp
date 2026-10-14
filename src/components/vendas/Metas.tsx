@@ -101,7 +101,7 @@ export function Metas({ podeEditar }: { podeEditar: boolean }) {
         acoes={
           <div className="flex items-center gap-1">
             <Button variante="fantasma" onClick={() => mudar(-1)} aria-label="Mês anterior"><ChevronLeft size={16} /></Button>
-            <span className="min-w-36 text-center text-sm font-medium capitalize">{nomeMes}</span>
+            <span className="min-w-36 text-center text-sm font-medium">{nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)}</span>
             <Button variante="fantasma" onClick={() => mudar(1)} aria-label="Próximo mês"><ChevronRight size={16} /></Button>
           </div>
         } />
