@@ -84,3 +84,26 @@ export function filtrarProdutos(lista: ProdutoVenda[], termo: string): Resultado
       aviso: p.disponivel !== null && p.disponivel <= 0 ? "Sem estoque" : undefined,
     }));
 }
+
+/** Qualquer pessoa ativa (cliente, fornecedor, vendedor...) para lançamentos */
+export async function buscarPessoas(supabase: SupabaseClient, termo: string, papel?: "eh_cliente" | "eh_fornecedor"): Promise<Resultado[]> {
+  let q = supabase.from("pessoas").select("id, codigo, razao_social, nome_fantasia, documento").eq("ativo", true).order("razao_social").limit(20);
+  if (papel) q = q.eq(papel, true);
+  const t = limpar(termo);
+  if (t) {
+    const dig = t.replace(/\D/g, "");
+    const conds = [`razao_social.ilike.%${t}%`, `nome_fantasia.ilike.%${t}%`];
+    if (dig && dig === t.replace(/[.\-/\s]/g, "")) {
+      conds.push(`documento.ilike.%${dig}%`);
+      if (dig.length <= 7) conds.push(`codigo.eq.${dig}`);
+    }
+    q = q.or(conds.join(","));
+  }
+  const { data } = await q;
+  type P = { id: string; codigo: number; razao_social: string; nome_fantasia: string | null; documento: string | null };
+  return ((data ?? []) as P[]).map((p) => ({
+    id: p.id,
+    rotulo: `${p.codigo} · ${p.nome_fantasia || p.razao_social}`,
+    detalhe: [p.nome_fantasia ? p.razao_social : null, p.documento ? formatarDocumento(p.documento) : null].filter(Boolean).join(" · "),
+  }));
+}

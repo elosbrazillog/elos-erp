@@ -37,17 +37,25 @@ export default async function Painel() {
   // Números do dia a dia (vendas e estoque)
   const veVendas = pode(sessao, "vendas");
   const veEstoque = pode(sessao, "estoque");
+  const veFinanceiro = pode(sessao, "financeiro");
   const hoje = new Date().toISOString().slice(0, 10);
   const em30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
   const conta = async (q: PromiseLike<{ count: number | null }>) => (await q).count ?? 0;
-  const [aguardando, aprovados, vencidos, vencendo, lotesComSaldo] = await Promise.all([
+  const somaAtraso = async () => {
+    if (!veFinanceiro) return 0;
+    const { data } = await supabase.from("vw_lancamentos").select("valor").eq("tipo", "receber").eq("situacao", "atrasado").limit(5000);
+    return ((data ?? []) as { valor: number }[]).reduce((a, l) => a + Number(l.valor), 0);
+  };
+  const [aguardando, aprovados, vencidos, vencendo, lotesComSaldo, atrasoReceber] = await Promise.all([
     veVendas ? conta(supabase.from("pedidos").select("id", { count: "exact", head: true }).eq("status", "aguardando_credito")) : 0,
     veVendas ? conta(supabase.from("pedidos").select("id", { count: "exact", head: true }).eq("status", "aprovado")) : 0,
     veEstoque ? conta(supabase.from("vw_estoque").select("id", { count: "exact", head: true }).gt("quantidade", 0).lt("validade", hoje)) : 0,
     veEstoque ? conta(supabase.from("vw_estoque").select("id", { count: "exact", head: true }).gt("quantidade", 0).gte("validade", hoje).lte("validade", em30)) : 0,
     veEstoque ? conta(supabase.from("vw_estoque").select("id", { count: "exact", head: true }).gt("quantidade", 0)) : 0,
+    somaAtraso(),
   ]);
-  const operacao = [
+  const operacao: { r: string; v: number | string; h: string; alerta: boolean }[] = [
+    ...(veFinanceiro ? [{ r: "A receber em atraso", v: atrasoReceber.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }), h: "/financeiro/lancamentos", alerta: atrasoReceber > 0 }] : []),
     ...(veVendas ? [
       { r: "Aguardando crédito", v: aguardando, h: "/vendas/credito", alerta: aguardando > 0 },
       { r: "Pedidos aprovados", v: aprovados, h: "/vendas/pedidos", alerta: false },

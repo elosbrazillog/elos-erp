@@ -18,7 +18,7 @@ export function FinanceiroCliente({ id }: { id: string }) {
     (async () => {
       const [c, t] = await Promise.all([
         supabase.from("vw_credito_clientes").select("*").eq("pessoa_id", id).maybeSingle(),
-        supabase.from("vw_lancamentos").select("id, descricao, valor, data_vencimento, situacao").eq("pessoa_id", id).eq("tipo", "receber")
+        supabase.from("vw_lancamentos").select("id, descricao, valor, data_vencimento, situacao").eq("pessoa_id", id).eq("tipo", "receber").eq("ativo", true)
           .is("data_quitacao", null).order("data_vencimento").limit(50),
       ]);
       if (c.error || t.error) setSemPermissao(true);

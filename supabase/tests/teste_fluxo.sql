@@ -18,7 +18,7 @@ insert into pedidos_itens (pedido_id, produto_id, quantidade, preco_unitario, de
   select pe.id, p.id, 4, p.preco_venda, 2 from pedidos pe, produtos p;
 update pedidos set valor_desconto = 5;
 select numero, valor_produtos, valor_desconto, valor_frete, valor_total, peso_total_kg from pedidos;
-insert into lancamentos (tipo, pessoa_id, descricao, valor, data_vencimento) select 'receber', id, 'Teste', 300, current_date - 3 from pessoas where razao_social='Lanchonete Teste';
+select lancamento_criar('receber', 'Teste', 300, current_date - 3, p_pessoa => id) from pessoas where razao_social='Lanchonete Teste';
 select situacao, pessoa_nome from vw_lancamentos;
 select limite_credito, em_aberto, em_atraso from vw_credito_clientes;
 reset role;

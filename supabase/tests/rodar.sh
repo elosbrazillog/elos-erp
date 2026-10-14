@@ -7,3 +7,4 @@ for f in tests/supabase_stub.sql migrations/*.sql; do $P -v ON_ERROR_STOP=1 -d t
 $P -d t -f tests/teste_fluxo.sql
 $P -d t -f tests/teste_fase2.sql
 $P -d t -f tests/teste_expedicao.sql
+$P -d t -f tests/teste_financeiro.sql
