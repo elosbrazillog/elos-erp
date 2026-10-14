@@ -15,9 +15,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-full">
-      <Sidebar grupos={grupos} nome={sessao.nome} perfil={sessao.perfilNome} empresa={sessao.empresaNome} />
-      <main className="lg:pl-64">
-        <div className="mx-auto max-w-[1400px] px-4 py-6 lg:px-8">{children}</div>
+      <div className="print:hidden"><Sidebar grupos={grupos} nome={sessao.nome} perfil={sessao.perfilNome} empresa={sessao.empresaNome} /></div>
+      <main className="lg:pl-64 print:pl-0">
+        <div className="mx-auto max-w-[1400px] px-4 py-6 lg:px-8 print:p-0">{children}</div>
       </main>
     </div>
   );

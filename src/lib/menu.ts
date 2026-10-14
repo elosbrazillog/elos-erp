@@ -77,7 +77,7 @@ export const MENU: GrupoMenu[] = [
     titulo: "Relatórios",
     modulo: "relatorios",
     icone: "chart",
-    itens: [{ titulo: "Central de relatórios", rota: "/relatorios", pronto: false }],
+    itens: [{ titulo: "Central de relatórios", rota: "/relatorios", pronto: true }],
   },
   {
     titulo: "Configurações",
