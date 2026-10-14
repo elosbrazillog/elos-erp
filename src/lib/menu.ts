@@ -30,6 +30,7 @@ export const MENU: GrupoMenu[] = [
     itens: [
       { titulo: "Pedidos e orçamentos", rota: "/vendas/pedidos", pronto: true },
       { titulo: "Aprovação de crédito", rota: "/vendas/credito", pronto: true },
+      { titulo: "App do vendedor", rota: "/app", pronto: true },
     ],
   },
   {
@@ -48,6 +49,7 @@ export const MENU: GrupoMenu[] = [
     icone: "truck",
     itens: [
       { titulo: "Cargas", rota: "/expedicao/cargas", pronto: true },
+      { titulo: "Acompanhamento", rota: "/expedicao/acompanhamento", pronto: true },
       { titulo: "Entregas", rota: "/expedicao/entregas", pronto: true },
     ],
   },

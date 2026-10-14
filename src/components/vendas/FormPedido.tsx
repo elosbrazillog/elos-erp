@@ -294,6 +294,9 @@ function EditarPedido({ id, podeEditar, podeExcluir, podeCredito }: { id: string
         <Aviso tom="aviso" titulo="Aguardando liberação do financeiro">{pedido.motivo_trava}. O estoque já está reservado.</Aviso>
       )}
       {pedido.status === "cancelado" && <Aviso tom="erro" titulo="Cancelado">{pedido.motivo_cancelamento}</Aviso>}
+      {rascunho && pedido.motivo_trava && (
+        <Aviso tom="aviso" titulo="Pedido do app do vendedor não confirmado">{pedido.motivo_trava}. Ajuste os itens e confirme.</Aviso>
+      )}
       {pedido.tipo === "orcamento" && pedido.validade && pedido.validade < hoje() && rascunho && (
         <Aviso tom="aviso" titulo="Orçamento vencido">Altere a data de validade para converter em pedido.</Aviso>
       )}

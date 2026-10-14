@@ -1,13 +1,14 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Check, ChevronDown, MapPin, MessageCircle, Phone, Undo2 } from "lucide-react";
+import { Check, ChevronDown, CloudOff, LocateFixed, LocateOff, MapPin, MessageCircle, Phone, Undo2 } from "lucide-react";
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import { Badge, Button, Cabecalho, Card, Label, Select, Textarea, Vazio } from "@/components/ui";
 import { Dialogo } from "@/components/ui/Dialogo";
 import { cn, formatarData, formatarMoeda, formatarNumero, formatarTelefone } from "@/lib/utils";
 import { STATUS_ENTREGA, enderecoTexto, linkMapa, mensagemErro } from "@/lib/pedidos";
 import type { Carga } from "@/components/expedicao/ListaCargas";
+import { filaPor, filaTodos, kvGet, kvSet, novoId, posicaoAtual, registrarServiceWorker, sincronizar } from "@/lib/offline";
 
 type Entrega = {
   id: string; pedido_id: string; ordem_entrega: number; status_entrega: string; motivo_devolucao: string | null; entregue_em: string | null;
@@ -31,17 +32,32 @@ export function Entregas({ motoristaId, cargaInicial, podeRegistrar }: { motoris
   const [tipo, setTipo] = useState<"devolvido_total" | "ausente">("devolvido_total");
   const [motivo, setMotivo] = useState("");
   const [ocupado, setOcupado] = useState(false);
+  const [online, setOnline] = useState(true);
+  const [aEnviar, setAEnviar] = useState(0);
+  const [gps, setGps] = useState<"ativo" | "negado" | "indisponivel" | null>(null);
+  const chaveCache = `entregas:${motoristaId ?? "todos"}`;
 
+  // Carrega da rede; sem sinal, usa a última cópia guardada no aparelho
   useEffect(() => {
+    registrarServiceWorker();
+    setOnline(navigator.onLine);
     let q = supabase.from("vw_expedicoes").select("*").eq("status", "em_rota").order("data").order("numero");
     if (motoristaId) q = q.eq("motorista_id", motoristaId);
-    q.then(({ data, error }) => {
-      if (error) return toast.error("Não foi possível carregar", { description: mensagemErro(error) });
-      const cs = (data ?? []) as Carga[];
+    q.then(async ({ data, error }) => {
+      let cs = (data ?? []) as Carga[];
+      if (error) {
+        const salvo = await kvGet<{ cargas: Carga[] }>(chaveCache);
+        if (!salvo) return toast.error("Não foi possível carregar", { description: mensagemErro(error) });
+        cs = salvo.cargas;
+        toast.info("Sem sinal: mostrando as entregas guardadas no aparelho.");
+      } else {
+        const salvo = (await kvGet<Record<string, unknown>>(chaveCache)) ?? {};
+        await kvSet(chaveCache, { ...salvo, cargas: cs });
+      }
       setCargas(cs);
       setCargaId((atual) => (atual && cs.some((c) => c.id === atual) ? atual : cs[0]?.id ?? null));
     });
-  }, [supabase, motoristaId]);
+  }, [supabase, motoristaId, chaveCache]);
 
   const carregar = useCallback(async () => {
     if (!cargaId) return;
@@ -49,22 +65,84 @@ export function Entregas({ motoristaId, cargaInicial, podeRegistrar }: { motoris
       supabase.from("vw_expedicao_pedidos").select("*").eq("expedicao_id", cargaId).order("ordem_entrega"),
       supabase.from("vw_expedicao_itens").select("pedido_id, produto_codigo, produto_nome, unidade, quantidade").eq("expedicao_id", cargaId).order("ordem"),
     ]);
-    const es = (e.data ?? []) as Entrega[];
+    let es = (e.data ?? []) as Entrega[];
+    let its = (i.data ?? []) as Item[];
+    const salvo = (await kvGet<Record<string, unknown>>(chaveCache)) ?? {};
+    if (e.error) {
+      const c = salvo[`carga:${cargaId}`] as { entregas: Entrega[]; itens: Item[] } | undefined;
+      if (c) { es = c.entregas; its = c.itens; }
+    } else {
+      await kvSet(chaveCache, { ...salvo, [`carga:${cargaId}`]: { entregas: es, itens: its } });
+    }
+    // registros ainda na fila aparecem como feitos
+    const fila = await filaTodos();
+    setAEnviar(fila.filter((f) => f.tipo === "entrega").length);
+    const naFila = new Map(fila.filter((f) => f.tipo === "entrega").map((f) => [String(f.args.p_expedicao_pedido), String(f.args.p_resultado)]));
+    es = es.map((x) => (naFila.has(x.id) && x.status_entrega === "pendente" ? { ...x, status_entrega: naFila.get(x.id)! } : x));
     setEntregas(es);
-    setItens((i.data ?? []) as Item[]);
+    setItens(its);
     setAberta((a) => a ?? es.find((x) => x.status_entrega === "pendente")?.id ?? null);
-  }, [supabase, cargaId]);
+  }, [supabase, cargaId, chaveCache]);
 
   useEffect(() => { carregar(); }, [carregar]);
 
+  // Envia o que ficou guardado quando o sinal volta
+  const enviarFila = useCallback(async () => {
+    const r = await sincronizar(supabase);
+    if (r.enviados) { toast.success(`${r.enviados} registro(s) enviados`); carregar(); }
+    if (r.erros) toast.error("Algum registro não foi aceito. Fale com o escritório.");
+    setAEnviar((await filaTodos()).filter((f) => f.tipo === "entrega").length);
+  }, [supabase, carregar]);
+  useEffect(() => {
+    if (navigator.onLine) enviarFila();
+    const on = () => { setOnline(true); enviarFila(); };
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, [enviarFila]);
+
+  // Posição do motorista para o acompanhamento (no máximo a cada minuto ou a cada 150 m)
+  useEffect(() => {
+    if (!cargaId || !podeRegistrar || !navigator.geolocation) { if (!navigator.geolocation) setGps("indisponivel"); return; }
+    let ultimo: { t: number; lat: number; lng: number } | null = null;
+    const dist = (a: number, b: number, c: number, d: number) => {
+      const r = Math.PI / 180, x = (d - b) * r * Math.cos(((a + c) / 2) * r), y = (c - a) * r;
+      return Math.sqrt(x * x + y * y) * 6371000;
+    };
+    const id = navigator.geolocation.watchPosition(
+      (p) => {
+        setGps("ativo");
+        const { latitude: lat, longitude: lng, accuracy } = p.coords;
+        const agora = Date.now();
+        if (ultimo && agora - ultimo.t < 60000 && dist(ultimo.lat, ultimo.lng, lat, lng) < 150) return;
+        ultimo = { t: agora, lat, lng };
+        if (navigator.onLine) supabase.rpc("app_posicao", { p_expedicao: cargaId, p_lat: lat, p_lng: lng, p_precisao: Math.round(accuracy) }).then(() => undefined);
+      },
+      (err) => setGps(err.code === err.PERMISSION_DENIED ? "negado" : "indisponivel"),
+      { enableHighAccuracy: true, maximumAge: 30000, timeout: 30000 },
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, [supabase, cargaId, podeRegistrar]);
+
   async function registrar(e: Entrega, resultado: "entregue" | "devolvido_total" | "ausente", m?: string) {
     setOcupado(true);
-    const { data, error } = await supabase.rpc("expedicao_registrar_entrega", { p_expedicao_pedido: e.id, p_resultado: resultado, p_motivo: m || null });
-    setOcupado(false);
-    if (error) return toast.error("Não foi possível registrar", { description: mensagemErro(error), duration: 10000 });
+    const pos = await posicaoAtual(3000);
+    const args = { p_expedicao_pedido: e.id, p_resultado: resultado, p_motivo: m || null, p_lat: pos?.lat ?? null, p_lng: pos?.lng ?? null };
     const nome = e.cliente_fantasia || e.cliente_nome;
-    toast.success(resultado === "entregue" ? `${nome}: entregue` : resultado === "ausente" ? `${nome}: cliente ausente, volta para o estoque` : `${nome}: devolução registrada`);
-    if ((data as { carga_concluida: boolean }).carga_concluida) toast.success("Todas as entregas registradas. Carga concluída.");
+    const { data, error } = navigator.onLine
+      ? await supabase.rpc("expedicao_registrar_entrega", args)
+      : { data: null, error: { message: "Failed to fetch" } };
+    setOcupado(false);
+    if (error && /Failed to fetch|NetworkError|Load failed|network/i.test(error.message)) {
+      await filaPor({ id: novoId(), tipo: "entrega", rpc: "expedicao_registrar_entrega", args, criadoEm: new Date().toISOString(), tentativas: 0, resumo: { cliente: nome, resultado } });
+      toast.info(`${nome}: guardado no aparelho. Sobe sozinho quando o sinal voltar.`);
+    } else if (error) {
+      return toast.error("Não foi possível registrar", { description: mensagemErro(error), duration: 10000 });
+    } else {
+      toast.success(resultado === "entregue" ? `${nome}: entregue` : resultado === "ausente" ? `${nome}: cliente ausente, volta para o estoque` : `${nome}: devolução registrada`);
+      if ((data as { carga_concluida: boolean }).carga_concluida) toast.success("Todas as entregas registradas. Carga concluída.");
+    }
     setNaoEntregue(null);
     const proxima = entregas.find((x) => x.status_entrega === "pendente" && x.id !== e.id);
     setAberta(proxima?.id ?? null);
@@ -77,6 +155,14 @@ export function Entregas({ motoristaId, cargaInicial, podeRegistrar }: { motoris
   return (
     <>
       <Cabecalho trilha="Expedição" titulo="Entregas" />
+      {(cargas?.length ?? 0) > 0 && (
+        <div className="mx-auto mb-3 flex max-w-2xl flex-wrap gap-2 text-xs">
+          {!online && <span className="flex items-center gap-1 rounded-full bg-warn/10 px-2 py-1 text-warn"><CloudOff size={13} /> Sem sinal: os registros ficam guardados</span>}
+          {aEnviar > 0 && <span className="rounded-full bg-warn/10 px-2 py-1 text-warn">{aEnviar} registro(s) a enviar</span>}
+          {gps === "ativo" && <span className="flex items-center gap-1 rounded-full bg-ok/10 px-2 py-1 text-ok"><LocateFixed size={13} /> Localização ativa</span>}
+          {gps === "negado" && <span className="flex items-center gap-1 rounded-full bg-bad/10 px-2 py-1 text-bad"><LocateOff size={13} /> Permita a localização para o escritório acompanhar a rota</span>}
+        </div>
+      )}
       {cargas === null && <div className="py-10 text-center text-sm text-muted">Carregando...</div>}
       {cargas?.length === 0 && (
         <Card><Vazio titulo="Nenhuma carga em rota" texto={motoristaId ? "Quando uma carga sua sair para entrega, ela aparece aqui." : "Cargas aparecem aqui depois da saída para entrega."} /></Card>

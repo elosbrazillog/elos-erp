@@ -1,0 +1,18 @@
+{
+  "id": "/app",
+  "name": "Elos Vendas",
+  "short_name": "Elos Vendas",
+  "description": "Força de vendas da Elos: rota do dia, pedidos e metas, mesmo sem sinal.",
+  "start_url": "/app",
+  "scope": "/app",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f2233",
+  "theme_color": "#0f2233",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/icones/vendas-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icones/vendas-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icones/vendas-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

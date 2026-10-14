@@ -144,7 +144,7 @@ reset role;
 -- ===================== vendedor: não libera crédito =====================
 set role authenticated;
 select set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
-select public.t_erro($$select pedido_liberar_credito(id) from pedidos where status = 'aguardando_credito'$$, 'não tem permissão');
+select public.t_erro($$select pedido_liberar_credito('00000000-0000-0000-0000-000000000000')$$, 'não tem permissão');
 select public.t_erro($$select estoque_entrada(p.id, d.id, 1, 'Z', current_date + 5) from produtos p, depositos d where p.codigo='EMP1' and d.padrao$$, 'não tem permissão');
 reset role;
 

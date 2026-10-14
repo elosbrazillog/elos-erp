@@ -7,7 +7,7 @@ import { criarClienteNavegador } from "@/lib/supabase/client";
 import { Badge, Button, Cabecalho, Card, Input } from "@/components/ui";
 import { ACOES, MENU, type Permissoes } from "@/lib/menu";
 
-type Perfil = { id: string; nome: string; descricao: string | null; administrador: boolean; permissoes: Permissoes; ativo: boolean };
+type Perfil = { id: string; nome: string; descricao: string | null; administrador: boolean; permissoes: Permissoes; ativo: boolean; apenas_carteira: boolean };
 const ROTULO_ACAO = { ver: "Ver", criar: "Criar", editar: "Editar", excluir: "Excluir" };
 
 export function Perfis({ perfis, empresaId, podeEditar }: { perfis: Perfil[]; empresaId: string; podeEditar: boolean }) {
@@ -31,7 +31,7 @@ export function Perfis({ perfis, empresaId, podeEditar }: { perfis: Perfil[]; em
   }
 
   async function salvar(p: Perfil) {
-    const { error } = await criarClienteNavegador().from("perfis").update({ permissoes: p.permissoes, descricao: p.descricao }).eq("id", p.id);
+    const { error } = await criarClienteNavegador().from("perfis").update({ permissoes: p.permissoes, descricao: p.descricao, apenas_carteira: p.apenas_carteira }).eq("id", p.id);
     if (error) return toast.error("Não foi possível salvar", { description: error.message });
     setSujos((s) => { const n = new Set(s); n.delete(p.id); return n; });
     toast.success(`Perfil ${p.nome} salvo`, { description: "Vale no próximo carregamento de página de cada usuário." });
@@ -70,6 +70,16 @@ export function Perfis({ perfis, empresaId, podeEditar }: { perfis: Perfil[]; em
                 </Button>
               )}
             </div>
+            {!p.administrador && (
+              <label className="flex items-start gap-2 border-b border-line/70 px-3 py-2 text-sm">
+                <input type="checkbox" className="mt-0.5 size-4 accent-[var(--accent)]" disabled={!podeEditar} checked={!!p.apenas_carteira}
+                  onChange={(e) => { setLista((l) => l.map((x) => (x.id === p.id ? { ...x, apenas_carteira: e.target.checked } : x))); setSujos((s) => new Set(s).add(p.id)); }} />
+                <span>
+                  Vê só a própria carteira
+                  <span className="block text-xs text-muted">Clientes e pedidos só do vendedor ligado ao usuário (Configurações › Usuários › Pessoa vinculada).</span>
+                </span>
+              </label>
+            )}
             {!p.administrador && (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">

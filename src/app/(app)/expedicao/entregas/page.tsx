@@ -1,7 +1,7 @@
 import { exigir, pode } from "@/lib/sessao";
 import { Entregas } from "@/components/expedicao/Entregas";
 
-export const metadata = { title: "Entregas" };
+export const metadata = { title: "Entregas", manifest: "/entregas.webmanifest", icons: { apple: "/icones/entregas-192.png" } };
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ carga?: string }> }) {
   const s = await exigir("expedicao", "ver");
