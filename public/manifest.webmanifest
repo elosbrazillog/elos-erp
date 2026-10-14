@@ -1,0 +1,10 @@
+{
+  "name": "Elos ERP",
+  "short_name": "Elos",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f2233",
+  "theme_color": "#0f2233",
+  "lang": "pt-BR",
+  "icons": [{ "src": "/icone.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
