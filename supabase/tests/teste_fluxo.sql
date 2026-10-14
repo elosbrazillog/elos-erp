@@ -10,10 +10,8 @@ insert into pessoas (razao_social, documento, eh_cliente, limite_credito) values
 insert into pessoas (razao_social, eh_vendedor) values ('João Vendedor', true);
 insert into produtos (codigo, nome, preco_venda, peso_bruto_kg) values ('COX1', 'Coxinha 1kg', 25.5, 1.05);
 insert into lotes (produto_id, numero, validade) select id, 'L001', current_date + 90 from produtos where codigo='COX1';
-insert into estoque_movimentos (tipo, deposito_id, produto_id, lote_id, quantidade)
-  select 'entrada', d.id, p.id, l.id, 100 from depositos d, produtos p, lotes l where d.padrao and p.codigo='COX1' and l.numero='L001';
-insert into estoque_movimentos (tipo, deposito_id, produto_id, lote_id, quantidade)
-  select 'perda', d.id, p.id, l.id, 3 from depositos d, produtos p, lotes l where d.padrao and p.codigo='COX1' and l.numero='L001';
+select estoque_entrada(p.id, d.id, 100, 'L001') from depositos d, produtos p where d.padrao and p.codigo='COX1';
+select estoque_movimentar(s.id, 'perda', 3, 'Descongelou') from estoque_saldos s;
 select produto_nome, lote_numero, quantidade, dias_para_vencer from vw_estoque;
 insert into pedidos (cliente_id, valor_frete) select id, 10 from pessoas where razao_social='Lanchonete Teste' returning numero;
 insert into pedidos_itens (pedido_id, produto_id, quantidade, preco_unitario, desconto)

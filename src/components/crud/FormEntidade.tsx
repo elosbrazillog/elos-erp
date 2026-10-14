@@ -12,6 +12,8 @@ import { GradeFilho } from "@/components/crud/GradeFilho";
 import { Confirmar } from "@/components/crud/Confirmar";
 import { ClientesDaRota } from "@/components/cadastros/ClientesDaRota";
 import { FinanceiroCliente } from "@/components/cadastros/FinanceiroCliente";
+import { HistoricoCliente } from "@/components/cadastros/HistoricoCliente";
+import { EstoqueProduto } from "@/components/cadastros/EstoqueProduto";
 
 type Dados = Record<string, unknown>;
 
@@ -21,6 +23,8 @@ const largura = (l?: number) =>
 const EXTRAS: Record<string, { titulo: string; Componente: React.ComponentType<{ id: string }> }> = {
   clientes_rota: { titulo: "Clientes da rota", Componente: ClientesDaRota },
   financeiro_cliente: { titulo: "Financeiro", Componente: FinanceiroCliente },
+  historico_cliente: { titulo: "Histórico de compras", Componente: HistoricoCliente },
+  estoque_produto: { titulo: "Estoque por lote", Componente: EstoqueProduto },
 };
 
 export function FormEntidade({

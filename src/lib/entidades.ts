@@ -184,7 +184,7 @@ export const ENTIDADES: Record<string, Entidade> = {
       { titulo: "Endereços", tabela: "pessoas_enderecos", fk: "pessoa_id", campos: camposEndereco, ordem: "tipo" },
       { titulo: "Contatos", tabela: "pessoas_contatos", fk: "pessoa_id", campos: camposContato, ordem: "nome" },
     ],
-    componentesExtras: ["financeiro_cliente"],
+    componentesExtras: ["financeiro_cliente", "historico_cliente"],
   },
 
   produtos: {
@@ -251,6 +251,7 @@ export const ENTIDADES: Record<string, Entidade> = {
         ],
       },
     ],
+    componentesExtras: ["estoque_produto"],
   },
 
   rotas: {

@@ -28,8 +28,8 @@ export const MENU: GrupoMenu[] = [
     modulo: "vendas",
     icone: "cart",
     itens: [
-      { titulo: "Pedidos e orçamentos", rota: "/vendas/pedidos", pronto: false },
-      { titulo: "Aprovação de crédito", rota: "/vendas/credito", pronto: false },
+      { titulo: "Pedidos e orçamentos", rota: "/vendas/pedidos", pronto: true },
+      { titulo: "Aprovação de crédito", rota: "/vendas/credito", pronto: true },
     ],
   },
   {
@@ -37,9 +37,9 @@ export const MENU: GrupoMenu[] = [
     modulo: "estoque",
     icone: "box",
     itens: [
-      { titulo: "Saldos por lote", rota: "/estoque/saldos", pronto: false },
-      { titulo: "Movimentações", rota: "/estoque/movimentos", pronto: false },
-      { titulo: "Inventário", rota: "/estoque/inventario", pronto: false },
+      { titulo: "Saldos por lote", rota: "/estoque/saldos", pronto: true },
+      { titulo: "Movimentações", rota: "/estoque/movimentos", pronto: true },
+      { titulo: "Inventário", rota: "/estoque/inventario", pronto: true },
     ],
   },
   {
