@@ -81,7 +81,7 @@ export function paraBanco(campo: Campo, v: Valor): Valor {
       return String(v).replace(/\D/g, "") || null;
     case "select":
       // indicador_ie e origem são números no banco
-      return /^\d+$/.test(String(v)) && ["indicador_ie", "origem"].includes(campo.nome) ? Number(v) : v;
+      return /^\d+$/.test(String(v)) && ["indicador_ie", "origem", "nfe_modalidade_frete"].includes(campo.nome) ? Number(v) : v;
     case "texto":
     case "textarea":
     case "email":
