@@ -8,7 +8,7 @@ import {
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import { Badge, Button, Input, Label, Textarea } from "@/components/ui";
 import { Dialogo } from "@/components/ui/Dialogo";
-import { cn, DIAS_SEMANA, formatarData, formatarMoeda, formatarNumero } from "@/lib/utils";
+import { cn, formatarData, formatarMoeda, formatarNumero } from "@/lib/utils";
 import { STATUS_PEDIDO, type StatusPedido } from "@/lib/pedidos";
 import { filaPor, filaTirar, filaTodos, kvGet, kvSet, novoId, posicaoAtual, registrarServiceWorker, sincronizar, type ItemFila } from "@/lib/offline";
 
@@ -28,7 +28,8 @@ type Preco = { tabela_preco_id: string; produto_id: string; preco: number; preco
 type PedidoResumo = { id: string; numero: number; status: StatusPedido; data_emissao: string; cliente_nome: string; cliente_fantasia: string | null;
   valor_total: number; motivo_trava: string | null; origem: string };
 type Resumo = { vendedor: string | null; vendido: number; pedidos: number; clientes_positivados: number; carteira: number; meta: number | null;
-  comissao_percentual: number | null; comissao_prevista: number | null; visitas_sem_pedido: number; dias_uteis_mes: number; dias_uteis_passados: number };
+  comissao_percentual: number | null; comissao_prevista: number | null; visitas_sem_pedido: number; dias_uteis_mes: number; dias_uteis_passados: number;
+  meta_da_empresa?: boolean; vendedores?: { nome: string; meta: number | null; vendido: number; pedidos: number }[] | null };
 type Dados = { carteira: Cliente[]; produtos: Produto[]; precos: Preco[]; pedidos: PedidoResumo[]; resumo: Resumo | null; atualizadoEm: string };
 type Carrinho = { clienteId: string | null; itens: Record<string, { qtd: number; preco: number }>; obs: string; entrega: string };
 
@@ -291,7 +292,7 @@ function AbaRota({ dados, onPedido, onNaoComprou }: { dados: Dados; onPedido: (c
     <>
       <div className="mb-3 flex items-end justify-between">
         <div>
-          <h1 className="text-lg font-semibold">Rota de {DIAS_SEMANA[dia].toLowerCase()}</h1>
+          <h1 className="text-lg font-semibold">Rota de {["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"][dia]}</h1>
           <p className="text-xs text-muted">{new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}</p>
         </div>
         {doDia.length > 0 && <div className="text-right text-xs text-muted"><div className="tabular text-base font-semibold text-ink">{visitados}/{doDia.length}</div>visitados · {comPedido} com pedido</div>}
@@ -569,7 +570,7 @@ function AbaMeta({ dados }: { dados: Dados }) {
     <div className="space-y-3">
       <h1 className="text-lg font-semibold">Resultado de {mes}</h1>
       <div className="rounded-lg border border-line bg-surface p-4">
-        <div className="text-xs text-muted">Vendido no mês</div>
+        <div className="text-xs text-muted">{r.meta_da_empresa ? "Vendido no mês · empresa toda" : "Vendido no mês"}</div>
         <div className="tabular text-2xl font-semibold">{formatarMoeda(vendido)}</div>
         {meta ? (
           <>
@@ -577,12 +578,12 @@ function AbaMeta({ dados }: { dados: Dados }) {
               <div className={cn("h-full rounded-full", vendido >= meta ? "bg-ok" : "bg-accent")} style={{ width: `${Math.min(100, (vendido / meta) * 100)}%` }} />
             </div>
             <div className="mt-1 flex justify-between text-xs text-muted">
-              <span>{Math.round((vendido / meta) * 100)}% da meta de {formatarMoeda(meta)}</span>
+              <span>{Math.round((vendido / meta) * 100)}% da meta {r.meta_da_empresa ? "da empresa" : ""} de {formatarMoeda(meta)}</span>
               {falta! > 0 && <span>faltam {formatarMoeda(falta)}</span>}
             </div>
             {falta! > 0 && diasRestantes > 0 && <p className="mt-2 text-sm">Para bater a meta: <b className="tabular">{formatarMoeda(falta! / diasRestantes)}</b> por dia útil nos {diasRestantes} dias que restam.</p>}
           </>
-        ) : <p className="mt-1 text-xs text-muted">Sem meta cadastrada.</p>}
+        ) : <p className="mt-1 text-xs text-muted">{r.meta_da_empresa ? "Sem meta para o mês. Lance em Vendas › Metas no sistema." : "Sem meta para o mês. Peça ao escritório para lançar."}</p>}
         <p className="mt-2 text-xs text-muted">No ritmo atual, o mês fecha em <span className="tabular font-medium text-ink">{formatarMoeda(projecao)}</span>.</p>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -598,6 +599,32 @@ function AbaMeta({ dados }: { dados: Dados }) {
           </div>
         ))}
       </div>
+      {!!r.vendedores?.length && (
+        <div className="rounded-lg border border-line bg-surface">
+          <div className="border-b border-line px-4 py-2 text-xs font-medium text-muted">Por vendedor</div>
+          <ul className="divide-y divide-line/70">
+            {r.vendedores.map((v) => {
+              const m = v.meta ? Number(v.meta) : null, x = Number(v.vendido);
+              return (
+                <li key={v.nome} className="px-4 py-2.5">
+                  <div className="flex justify-between gap-2 text-sm">
+                    <span className="truncate">{v.nome}</span>
+                    <span className="tabular shrink-0">{formatarMoeda(x)}</span>
+                  </div>
+                  {m ? (
+                    <>
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
+                        <div className={cn("h-full rounded-full", x >= m ? "bg-ok" : "bg-accent")} style={{ width: `${Math.min(100, (x / m) * 100)}%` }} />
+                      </div>
+                      <div className="mt-0.5 text-xs text-muted">{Math.round((x / m) * 100)}% de {formatarMoeda(m)} · {v.pedidos} pedidos</div>
+                    </>
+                  ) : <div className="text-xs text-muted">Sem meta · {v.pedidos} pedidos</div>}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
       {r.comissao_prevista !== null && (
         <div className="rounded-lg border border-line bg-surface p-4">
           <div className="text-xs text-muted">Comissão prevista ({formatarNumero(r.comissao_percentual ?? 0)}%)</div>
