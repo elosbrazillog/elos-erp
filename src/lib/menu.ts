@@ -47,8 +47,8 @@ export const MENU: GrupoMenu[] = [
     modulo: "expedicao",
     icone: "truck",
     itens: [
-      { titulo: "Montar carga", rota: "/expedicao/cargas", pronto: false },
-      { titulo: "Entregas", rota: "/expedicao/entregas", pronto: false },
+      { titulo: "Cargas", rota: "/expedicao/cargas", pronto: true },
+      { titulo: "Entregas", rota: "/expedicao/entregas", pronto: true },
     ],
   },
   {

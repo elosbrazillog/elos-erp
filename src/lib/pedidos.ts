@@ -52,3 +52,30 @@ export function mensagemErro(e: { message?: string } | null | undefined) {
   if (m.includes("Failed to fetch")) return "Sem conexão com o servidor. Tente de novo.";
   return m;
 }
+
+export const STATUS_CARGA = {
+  montando: { rotulo: "Montando", tom: "neutro" },
+  separando: { rotulo: "Em separação", tom: "acento" },
+  carregado: { rotulo: "Carregada", tom: "acento" },
+  em_rota: { rotulo: "Em rota", tom: "aviso" },
+  concluida: { rotulo: "Concluída", tom: "ok" },
+  cancelada: { rotulo: "Cancelada", tom: "erro" },
+} as const satisfies Record<string, { rotulo: string; tom: Tom }>;
+
+export const STATUS_ENTREGA: Record<string, { rotulo: string; tom: Tom }> = {
+  pendente: { rotulo: "A entregar", tom: "neutro" },
+  entregue: { rotulo: "Entregue", tom: "ok" },
+  devolvido_total: { rotulo: "Devolvido", tom: "erro" },
+  devolvido_parcial: { rotulo: "Devolução parcial", tom: "aviso" },
+  ausente: { rotulo: "Cliente ausente", tom: "aviso" },
+};
+
+/** Endereço em uma linha e link para o mapa */
+export function enderecoTexto(e: { logradouro?: string | null; endereco_numero?: string | null; complemento?: string | null; bairro?: string | null; cidade?: string | null; uf?: string | null }) {
+  const rua = [e.logradouro, e.endereco_numero].filter(Boolean).join(", ");
+  return [rua, e.complemento, e.bairro, e.cidade && `${e.cidade}/${e.uf ?? ""}`].filter(Boolean).join(" · ");
+}
+export function linkMapa(e: { latitude?: number | null; longitude?: number | null; logradouro?: string | null; endereco_numero?: string | null; bairro?: string | null; cidade?: string | null; uf?: string | null }) {
+  const q = e.latitude && e.longitude ? `${e.latitude},${e.longitude}` : [e.logradouro, e.endereco_numero, e.bairro, e.cidade, e.uf].filter(Boolean).join(", ");
+  return q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : null;
+}

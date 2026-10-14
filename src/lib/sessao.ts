@@ -13,6 +13,7 @@ export type Sessao = {
   perfilNome: string;
   administrador: boolean;
   permissoes: Permissoes;
+  pessoaId: string | null;
 };
 
 export const obterSessao = cache(async (): Promise<Sessao | null> => {
@@ -24,7 +25,7 @@ export const obterSessao = cache(async (): Promise<Sessao | null> => {
 
   const { data } = await supabase
     .from("usuarios")
-    .select("id, nome, email, empresa_id, ativo, perfis(nome, administrador, permissoes), empresas(nome_fantasia, razao_social)")
+    .select("id, nome, email, empresa_id, ativo, pessoa_id, perfis(nome, administrador, permissoes), empresas(nome_fantasia, razao_social)")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -41,6 +42,7 @@ export const obterSessao = cache(async (): Promise<Sessao | null> => {
     perfilNome: perfil?.nome ?? "Sem perfil",
     administrador: !!perfil?.administrador,
     permissoes: perfil?.permissoes ?? {},
+    pessoaId: (data as { pessoa_id?: string | null }).pessoa_id ?? null,
   };
 });
 

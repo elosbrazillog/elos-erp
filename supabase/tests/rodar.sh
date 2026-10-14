@@ -6,3 +6,4 @@ $P -c "drop database if exists t" -c "create database t" || exit 1
 for f in tests/supabase_stub.sql migrations/*.sql; do $P -v ON_ERROR_STOP=1 -d t -f "$f" || { echo "FALHOU: $f"; exit 1; }; done
 $P -d t -f tests/teste_fluxo.sql
 $P -d t -f tests/teste_fase2.sql
+$P -d t -f tests/teste_expedicao.sql

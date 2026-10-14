@@ -3,7 +3,7 @@ import { criarClienteServidor } from "@/lib/supabase/server";
 import { obterSessao, pode } from "@/lib/sessao";
 import { formatarData, formatarDocumento, formatarMoeda, formatarNumero, formatarTelefone } from "@/lib/utils";
 import { STATUS_PEDIDO, type StatusPedido } from "@/lib/pedidos";
-import { BotaoImprimir } from "./BotaoImprimir";
+import { BotaoImprimir } from "@/app/imprimir/BotaoImprimir";
 
 export const metadata = { title: "Imprimir pedido" };
 
