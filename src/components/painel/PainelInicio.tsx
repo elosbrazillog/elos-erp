@@ -62,7 +62,7 @@ export function PainelInicio({ d }: { d: DadosPainel }) {
         <div className="grid gap-3 lg:grid-cols-3">
           {temVendas && d.diario && <Grafico titulo="Faturamento por dia" sub={`${moedaCurta(n(d.faturado_hoje))} hoje`}><Diario d={d} /></Grafico>}
           {temVendas && d.meses && <Grafico titulo="Últimos 6 meses" sub="faturado"><Meses meses={d.meses} /></Grafico>}
-          {temFin && d.semanas && <Grafico titulo="Próximas 4 semanas" sub="em aberto, pelo vencimento"><Semanas semanas={d.semanas} /></Grafico>}
+          {temFin && d.semanas && <Grafico titulo="Próximas 4 semanas" sub="em aberto"><Semanas semanas={d.semanas} /></Grafico>}
         </div>
       )}
 
@@ -91,7 +91,7 @@ function MetasComissoes({ d }: { d: DadosPainel }) {
         <p className="px-4 pb-4 text-sm text-muted">Nenhum vendedor com meta ou faturamento no mês. <Link href="/vendas/metas" className="text-accent underline">Definir metas</Link></p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-sm">
+          <table className="w-full min-w-[820px] text-sm [&_td]:whitespace-nowrap">
             <thead>
               <tr className="border-y border-line bg-surface-2/60 text-left text-[11px] font-medium tracking-wide text-muted uppercase">
                 <th className="px-4 py-2 font-medium">Vendedor</th>
@@ -176,8 +176,8 @@ function Grafico({ titulo, sub, children }: { titulo: string; sub?: string; chil
   return (
     <Card className="p-4">
       <div className="mb-3 flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-medium">{titulo}</h3>
-        {sub && <span className="text-xs text-muted">{sub}</span>}
+        <h3 className="truncate text-sm font-medium">{titulo}</h3>
+        {sub && <span className="shrink-0 text-xs whitespace-nowrap text-muted">{sub}</span>}
       </div>
       {children}
     </Card>
