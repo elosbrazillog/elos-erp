@@ -71,9 +71,9 @@ export const MENU: GrupoMenu[] = [
     modulo: "financeiro",
     icone: "money",
     itens: [
+      { titulo: "Departamento financeiro", rota: "/financeiro/painel", pronto: true },
       { titulo: "Lançamentos", rota: "/financeiro/lancamentos", pronto: true },
       { titulo: "Caixa e bancos", rota: "/financeiro/caixa", pronto: true },
-      { titulo: "Boletos", rota: "/financeiro/boletos", pronto: false },
       { titulo: "Contas bancárias", rota: "/cadastros/contas-bancarias", pronto: true },
       { titulo: "Plano de contas", rota: "/cadastros/plano-contas", pronto: true },
       { titulo: "Centros de custo", rota: "/cadastros/centros-custo", pronto: true },

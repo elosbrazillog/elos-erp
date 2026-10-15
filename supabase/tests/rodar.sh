@@ -16,3 +16,4 @@ $P -d t -f tests/teste_painel.sql
 $P -d t -f tests/teste_equipe.sql
 $P -d t -f tests/teste_acerto.sql
 $P -d t -f tests/teste_despesas.sql
+$P -d t -f tests/teste_dre.sql
