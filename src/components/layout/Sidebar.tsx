@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
-  Users, ShoppingCart, Package, Truck, FileText, Wallet, BarChart3, Settings, LayoutDashboard, Menu, X, LogOut, ChevronDown,
+  Users, ShoppingCart, Package, Truck, FileText, Wallet, BarChart3, Settings, LayoutDashboard, Gauge, Menu, X, LogOut, ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { GrupoMenu } from "@/lib/menu";
@@ -12,7 +12,7 @@ const ICONES: Record<string, React.ComponentType<{ size?: number; className?: st
   users: Users, cart: ShoppingCart, box: Package, truck: Truck, file: FileText, money: Wallet, chart: BarChart3, gear: Settings,
 };
 
-export function Sidebar({ grupos, nome, perfil, empresa }: { grupos: GrupoMenu[]; nome: string; perfil: string; empresa: string }) {
+export function Sidebar({ grupos, nome, perfil, empresa, administrador = false }: { grupos: GrupoMenu[]; nome: string; perfil: string; empresa: string; administrador?: boolean }) {
   const pathname = usePathname();
   const [aberto, setAberto] = useState(false);
   const grupoAtivo = grupos.find((g) => g.itens.some((i) => pathname.startsWith(i.rota)))?.titulo;
@@ -39,6 +39,15 @@ export function Sidebar({ grupos, nome, perfil, empresa }: { grupos: GrupoMenu[]
         >
           <LayoutDashboard size={17} /> Painel
         </Link>
+        {administrador && (
+          <Link
+            href="/gestao"
+            onClick={() => setAberto(false)}
+            className={cn("mb-1 flex items-center gap-2.5 rounded-md px-3 py-2", pathname.startsWith("/gestao") ? "bg-side-active text-white shadow-[inset_3px_0_0_var(--accent)]" : "hover:bg-side-active/60")}
+          >
+            <Gauge size={17} /> Gestão geral
+          </Link>
+        )}
         {grupos.map((g) => {
           const Icone = ICONES[g.icone] ?? Users;
           const exp = expandidos.includes(g.titulo);
