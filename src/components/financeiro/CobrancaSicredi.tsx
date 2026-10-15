@@ -311,8 +311,8 @@ export function CobrancaSicredi({ de, ate }: { de: string; ate: string }) {
       </div>
 
       <p className="text-xs text-muted">
-        Como funciona: o boleto ganha nosso número e código de barras no faturamento. Gere a remessa, envie o arquivo .CRM no internet banking do Sicredi
-        (Cobrança → Arquivos → Enviar remessa) e imprima os boletos. No dia seguinte, baixe o retorno (.CRT) e leia aqui: os boletos passam a
+        Como funciona: o boleto ganha nosso número e código de barras no faturamento. Gere a remessa, envie o arquivo .CRM pela área de Cobrança do internet banking do Sicredi
+        (envio de arquivo de remessa) e imprima os boletos. No dia seguinte, baixe o retorno (.CRT) e leia aqui: os boletos passam a
         registrados e os pagos dão baixa sozinhos no contas a receber.
       </p>
 
