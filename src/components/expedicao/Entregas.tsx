@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Check, ChevronDown, CloudOff, LocateFixed, LocateOff, MapPin, MapPinCheck, MessageCircle, Navigation, Phone, Undo2 } from "lucide-react";
 import { criarClienteNavegador } from "@/lib/supabase/client";
-import { Badge, Button, Cabecalho, Card, Label, Select, Textarea, Vazio } from "@/components/ui";
+import { Badge, Button, Cabecalho, Card, Input, Label, Select, Textarea, Vazio } from "@/components/ui";
 import { Dialogo } from "@/components/ui/Dialogo";
 import { cn, formatarData, formatarMoeda, formatarNumero, formatarTelefone } from "@/lib/utils";
 import { enderecoTexto, linkMapa, mensagemErro, situacaoEntrega } from "@/lib/pedidos";
@@ -16,7 +16,12 @@ type Entrega = {
   cliente_codigo: number; cliente_nome: string; cliente_fantasia: string | null; telefone: string | null; whatsapp: string | null;
   logradouro: string | null; endereco_numero: string | null; complemento: string | null; bairro: string | null; cidade: string | null; uf: string | null;
   referencia: string | null; latitude: number | null; longitude: number | null; etapa: string | null;
+  recebe_na_entrega: TipoRec | null; recebido_dinheiro: number; recebido_pix: number; recebido_cartao: number;
 };
+type TipoRec = "dinheiro" | "pix" | "cartao";
+type Recebimento = { tipo: TipoRec; valor: number; texto?: string };
+const txt = (v: number) => v.toFixed(2).replace(".", ",");
+const NOME_REC: Record<TipoRec, string> = { dinheiro: "Dinheiro", pix: "PIX", cartao: "Cartão" };
 type Item = { pedido_id: string; produto_codigo: string; produto_nome: string; unidade: string | null; quantidade: number };
 
 const MOTIVOS = ["Produto descongelado", "Avaria na embalagem", "Cliente recusou", "Pedido errado", "Sem dinheiro para pagar"];
@@ -35,6 +40,8 @@ export function Entregas({ motoristaId, cargaInicial, podeRegistrar }: { motoris
   const [online, setOnline] = useState(true);
   const [aEnviar, setAEnviar] = useState(0);
   const [gps, setGps] = useState<"ativo" | "negado" | "indisponivel" | null>(null);
+  const [recebendo, setRecebendo] = useState<Entrega | null>(null);
+  const [recs, setRecs] = useState<Recebimento[]>([]);
   const chaveCache = `entregas:${motoristaId ?? "todos"}`;
 
   // Carrega da rede; sem sinal, usa a última cópia guardada no aparelho
@@ -80,6 +87,14 @@ export function Entregas({ motoristaId, cargaInicial, podeRegistrar }: { motoris
     const daFila = fila.filter((f) => f.tipo === "entrega");
     const naFila = new Map(daFila.filter((f) => f.rpc === "expedicao_registrar_entrega").map((f) => [String(f.args.p_expedicao_pedido), String(f.args.p_resultado)]));
     const etapas = new Map(daFila.filter((f) => f.rpc === "expedicao_etapa").map((f) => [String(f.args.p_expedicao_pedido), String(f.args.p_etapa)]));
+    const recFila = new Map(daFila.filter((f) => f.rpc === "expedicao_registrar_entrega" && Array.isArray(f.args.p_recebimentos))
+      .map((f) => [String(f.args.p_expedicao_pedido), f.args.p_recebimentos as Recebimento[]]));
+    es = es.map((x) => {
+      const r = recFila.get(x.id);
+      if (!r || x.status_entrega !== "pendente") return x;
+      const s = (t: TipoRec) => r.filter((y) => y.tipo === t).reduce((a, y) => a + Number(y.valor), 0);
+      return { ...x, recebido_dinheiro: s("dinheiro"), recebido_pix: s("pix"), recebido_cartao: s("cartao") };
+    });
     es = es.map((x) => (naFila.has(x.id) && x.status_entrega === "pendente" ? { ...x, status_entrega: naFila.get(x.id)! }
       : etapas.has(x.id) && x.status_entrega === "pendente" ? { ...x, etapa: etapas.get(x.id)! } : x));
     setEntregas(es);
@@ -128,10 +143,16 @@ export function Entregas({ motoristaId, cargaInicial, podeRegistrar }: { motoris
     return () => navigator.geolocation.clearWatch(id);
   }, [supabase, cargaId, podeRegistrar]);
 
-  async function registrar(e: Entrega, resultado: "entregue" | "devolvido_total" | "ausente", m?: string) {
+  function abrirRecebimento(e: Entrega) {
+    setRecs([{ tipo: e.recebe_na_entrega ?? "dinheiro", valor: Number(e.valor_total) }]);
+    setRecebendo(e);
+  }
+
+  async function registrar(e: Entrega, resultado: "entregue" | "devolvido_total" | "ausente", m?: string, recebimentos?: Recebimento[]) {
     setOcupado(true);
     const pos = await posicaoAtual(3000);
-    const args = { p_expedicao_pedido: e.id, p_resultado: resultado, p_motivo: m || null, p_lat: pos?.lat ?? null, p_lng: pos?.lng ?? null };
+    const args: Record<string, unknown> = { p_expedicao_pedido: e.id, p_resultado: resultado, p_motivo: m || null, p_lat: pos?.lat ?? null, p_lng: pos?.lng ?? null };
+    if (recebimentos?.length) args.p_recebimentos = recebimentos.map((r) => ({ tipo: r.tipo, valor: Math.round(r.valor * 100) / 100 }));
     const nome = e.cliente_fantasia || e.cliente_nome;
     const { data, error } = navigator.onLine
       ? await supabase.rpc("expedicao_registrar_entrega", args)
@@ -147,6 +168,7 @@ export function Entregas({ motoristaId, cargaInicial, podeRegistrar }: { motoris
       if ((data as { carga_concluida: boolean }).carga_concluida) toast.success("Todas as entregas registradas. Carga concluída.");
     }
     setNaoEntregue(null);
+    setRecebendo(null);
     const proxima = entregas.find((x) => x.status_entrega === "pendente" && x.id !== e.id);
     setAberta(proxima?.id ?? null);
     carregar();
@@ -180,6 +202,10 @@ export function Entregas({ motoristaId, cargaInicial, podeRegistrar }: { motoris
 
   const carga = cargas?.find((c) => c.id === cargaId);
   const pendentes = entregas.filter((e) => e.status_entrega === "pendente").length;
+  const recebido = (t: "recebido_dinheiro" | "recebido_pix" | "recebido_cartao") => entregas.reduce((a, e) => a + Number(e[t] ?? 0), 0);
+  const aReceberDinheiro = entregas.filter((e) => e.status_entrega === "pendente" && e.recebe_na_entrega === "dinheiro").reduce((a, e) => a + Number(e.valor_total), 0);
+  const somaRecs = recs.reduce((a, r) => a + (Number(r.valor) || 0), 0);
+  const totalRec = Number(recebendo?.valor_total ?? 0);
 
   return (
     <>
@@ -209,6 +235,16 @@ export function Entregas({ motoristaId, cargaInicial, podeRegistrar }: { motoris
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-surface-2" aria-hidden>
             <div className="h-full bg-ok" style={{ width: `${entregas.length ? ((entregas.length - pendentes) / entregas.length) * 100 : 0}%` }} />
+          </div>
+          <div className={cn("grid grid-cols-3 gap-2 rounded-lg border p-2.5 text-center", pendentes === 0 && entregas.length ? "border-accent bg-accent-soft/50" : "border-line bg-surface")}>
+            <div><div className="text-[11px] text-muted">Dinheiro recebido</div><div className="tabular font-semibold">{formatarMoeda(recebido("recebido_dinheiro"))}</div></div>
+            <div><div className="text-[11px] text-muted">PIX</div><div className="tabular font-semibold">{formatarMoeda(recebido("recebido_pix"))}</div></div>
+            <div><div className="text-[11px] text-muted">Cartão</div><div className="tabular font-semibold">{formatarMoeda(recebido("recebido_cartao"))}</div></div>
+            <div className="col-span-3 text-xs text-muted">
+              {pendentes === 0 && entregas.length
+                ? <>Rota encerrada. Entregue <b className="tabular text-ink">{formatarMoeda(recebido("recebido_dinheiro"))}</b> em dinheiro no escritório para o acerto.</>
+                : aReceberDinheiro > 0 ? <>Ainda a receber em dinheiro: <span className="tabular">{formatarMoeda(aReceberDinheiro)}</span></> : null}
+            </div>
           </div>
 
           {entregas.map((e) => {
@@ -268,7 +304,7 @@ export function Entregas({ motoristaId, cargaInicial, podeRegistrar }: { motoris
                     {pendente && podeRegistrar && (
                       <div className="grid grid-cols-2 gap-2 pt-1">
                         <Button variante="perigo" className="h-11" disabled={ocupado} onClick={() => { setTipo("devolvido_total"); setMotivo(""); setNaoEntregue(e); }}><Undo2 size={16} /> Não entregue</Button>
-                        <Button variante="primario" className="h-11" disabled={ocupado} onClick={() => registrar(e, "entregue")}><Check size={16} /> Entregue</Button>
+                        <Button variante="primario" className="h-11" disabled={ocupado} onClick={() => (e.recebe_na_entrega ? abrirRecebimento(e) : registrar(e, "entregue"))}><Check size={16} /> Entregue</Button>
                       </div>
                     )}
                   </div>
@@ -278,6 +314,49 @@ export function Entregas({ motoristaId, cargaInicial, podeRegistrar }: { motoris
           })}
         </div>
       )}
+
+      <Dialogo aberto={!!recebendo} titulo="Recebimento" descricao={recebendo ? `${recebendo.cliente_fantasia || recebendo.cliente_nome} · pedido ${recebendo.pedido_numero} · ${formatarMoeda(totalRec)}` : undefined}
+        aoFechar={() => setRecebendo(null)}
+        rodape={<>
+          <Button onClick={() => setRecebendo(null)}>Voltar</Button>
+          <Button variante="primario" disabled={ocupado || Math.abs(somaRecs - totalRec) > 0.009 || recs.some((r) => !(Number(r.valor) > 0))}
+            onClick={() => registrar(recebendo!, "entregue", undefined, recs)}><Check size={16} /> Confirmar entrega</Button>
+        </>}>
+        <div className="space-y-3">
+          {recs.map((r, i) => (
+            <div key={i} className="grid grid-cols-[1fr_9rem] items-end gap-2">
+              <div>
+                <Label htmlFor={`rec-tipo-${i}`}>{i === 0 ? "Recebeu em" : "E o restante em"}</Label>
+                <Select id={`rec-tipo-${i}`} value={r.tipo} onChange={(ev) => setRecs((rs) => rs.map((x, k) => (k === i ? { ...x, tipo: ev.target.value as TipoRec } : x)))}>
+                  {(Object.keys(NOME_REC) as TipoRec[]).filter((t) => t === r.tipo || !recs.some((x) => x.tipo === t)).map((t) => <option key={t} value={t}>{NOME_REC[t]}</option>)}
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor={`rec-valor-${i}`}>Valor</Label>
+                <Input id={`rec-valor-${i}`} inputMode="decimal" className="tabular h-11 text-right" value={r.texto ?? txt(r.valor)}
+                  onChange={(ev) => {
+                    const v = Number(ev.target.value.replace(/\./g, "").replace(",", ".")) || 0;
+                    const resto = Math.max(0, Math.round((totalRec - v) * 100) / 100);
+                    setRecs((rs) => rs.map((x, k) => (k === i ? { ...x, valor: v, texto: ev.target.value } : rs.length === 2 ? { ...x, valor: resto, texto: txt(resto) } : x)));
+                  }} />
+              </div>
+            </div>
+          ))}
+          {recs.length === 1 ? (
+            <Button className="w-full" onClick={() => {
+              const outro: TipoRec = recs[0].tipo === "dinheiro" ? "pix" : "dinheiro";
+              const metade = Math.round((totalRec / 2) * 100) / 100;
+              setRecs([{ ...recs[0], valor: metade, texto: undefined }, { tipo: outro, valor: Math.round((totalRec - metade) * 100) / 100 }]);
+            }}>Dividir em dois pagamentos (ex.: parte em dinheiro, parte no PIX)</Button>
+          ) : (
+            <Button variante="fantasma" className="w-full" onClick={() => setRecs([{ ...recs[0], valor: totalRec, texto: undefined }])}>Voltar para um pagamento só</Button>
+          )}
+          <div className={cn("flex justify-between rounded p-2 text-sm", Math.abs(somaRecs - totalRec) > 0.009 ? "bg-bad/10 text-bad" : "bg-surface-2")}>
+            <span>Total recebido</span>
+            <span className="tabular font-semibold">{formatarMoeda(somaRecs)}{Math.abs(somaRecs - totalRec) > 0.009 ? ` · falta fechar ${formatarMoeda(totalRec - somaRecs)}` : ""}</span>
+          </div>
+        </div>
+      </Dialogo>
 
       <Dialogo aberto={!!naoEntregue} titulo="Não entregue" descricao={naoEntregue ? naoEntregue.cliente_fantasia || naoEntregue.cliente_nome : undefined} aoFechar={() => setNaoEntregue(null)}
         rodape={<>

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowDown, ArrowLeft, ArrowUp, Ban, ClipboardList, PackageCheck, Plus, Printer, Route, Truck, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Ban, ClipboardList, PackageCheck, Plus, Printer, Route, Truck, Wallet, X } from "lucide-react";
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import { Badge, Button, Cabecalho, Card, Input, Label, Select, Textarea, Vazio } from "@/components/ui";
 import { Dialogo } from "@/components/ui/Dialogo";
@@ -130,6 +130,7 @@ export function DetalheCarga({ id, podeEditar }: { id: string; podeEditar: boole
           {podeEditar && montagem && pedidos.length > 0 &&
             <Button variante="primario" disabled={ocupado || alterado} title={alterado ? "Salve os dados antes" : undefined} onClick={() => setDialogo("saida")}><Truck size={16} /> Saída para entrega</Button>}
           {carga.status === "em_rota" && <Link href={`/expedicao/entregas?carga=${id}`}><Button variante="primario"><Truck size={16} /> Entregas</Button></Link>}
+          {(carga.status === "em_rota" || carga.status === "concluida") && <Link href={`/expedicao/cargas/${id}/acerto`}><Button variante={carga.status === "concluida" ? "primario" : "secundario"}><Wallet size={16} /> Acerto do motorista</Button></Link>}
           {podeEditar && montagem && <Button variante="perigo" disabled={ocupado} onClick={() => setDialogo("cancelar")}><Ban size={16} /> Cancelar</Button>}
         </>} />
 
