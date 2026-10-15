@@ -10,6 +10,7 @@ export const MENU: GrupoMenu[] = [
     icone: "users",
     itens: [
       { titulo: "Clientes e fornecedores", rota: "/cadastros/pessoas", pronto: true },
+      { titulo: "Motoristas e vendedores", rota: "/cadastros/equipe", pronto: true },
       { titulo: "Produtos", rota: "/cadastros/produtos", pronto: true },
       { titulo: "Rotas", rota: "/cadastros/rotas", pronto: true },
       { titulo: "Tabelas de preço", rota: "/cadastros/tabelas-preco", pronto: true },

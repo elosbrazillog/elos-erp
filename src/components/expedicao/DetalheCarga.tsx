@@ -3,16 +3,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowDown, ArrowLeft, ArrowUp, Ban, ClipboardList, PackageCheck, Plus, Printer, Truck, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Ban, ClipboardList, PackageCheck, Plus, Printer, Route, Truck, X } from "lucide-react";
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import { Badge, Button, Cabecalho, Card, Input, Label, Select, Textarea, Vazio } from "@/components/ui";
 import { Dialogo } from "@/components/ui/Dialogo";
 import { cn, formatarData, formatarMoeda, formatarNumero } from "@/lib/utils";
-import { STATUS_CARGA, STATUS_ENTREGA, enderecoTexto, mensagemErro } from "@/lib/pedidos";
+import { STATUS_CARGA, enderecoTexto, mensagemErro, situacaoEntrega } from "@/lib/pedidos";
+import { Roteirizar } from "@/components/expedicao/Roteirizar";
 import { useOpcoesCarga, type Carga } from "@/components/expedicao/ListaCargas";
 
 type PedidoCarga = {
-  id: string; pedido_id: string; ordem_entrega: number; status_entrega: string; motivo_devolucao: string | null;
+  id: string; pedido_id: string; ordem_entrega: number; status_entrega: string; motivo_devolucao: string | null; etapa: string | null;
   pedido_numero: number; valor_total: number; peso_total_kg: number; data_entrega: string | null; qtd_itens: number;
   cliente_codigo: number; cliente_nome: string; cliente_fantasia: string | null;
   logradouro: string | null; endereco_numero: string | null; bairro: string | null; cidade: string | null; uf: string | null;
@@ -34,6 +35,7 @@ export function DetalheCarga({ id, podeEditar }: { id: string; podeEditar: boole
   const [disponiveis, setDisponiveis] = useState<Disponivel[]>([]);
   const [marcados, setMarcados] = useState<Set<string>>(new Set());
   const [filtroRota, setFiltroRota] = useState<"rota" | "todas">("rota");
+  const [roteirizando, setRoteirizando] = useState(false);
 
   const carregar = useCallback(async () => {
     const [c, p, s] = await Promise.all([
@@ -122,6 +124,7 @@ export function DetalheCarga({ id, podeEditar }: { id: string; podeEditar: boole
           {pedidos.length > 0 && <a href={`/imprimir/separacao/${id}`} target="_blank" rel="noreferrer"><Button><ClipboardList size={16} /> Separação</Button></a>}
           {pedidos.length > 0 && <a href={`/imprimir/romaneio/${id}`} target="_blank" rel="noreferrer"><Button><Printer size={16} /> Romaneio</Button></a>}
           {podeEditar && montagem && <Button onClick={abrirInclusao} disabled={ocupado}><Plus size={16} /> Incluir pedidos</Button>}
+          {podeEditar && montagem && pedidos.length > 1 && <Button onClick={() => setRoteirizando(true)} disabled={ocupado}><Route size={16} /> Roteirizar</Button>}
           {podeEditar && carga.status === "montando" && pedidos.length > 0 &&
             <Button disabled={ocupado} onClick={() => rpc("expedicao_separar", { p_expedicao: id }, "Separação iniciada. Imprima a lista de separação.")}><PackageCheck size={16} /> Iniciar separação</Button>}
           {podeEditar && montagem && pedidos.length > 0 &&
@@ -148,7 +151,7 @@ export function DetalheCarga({ id, podeEditar }: { id: string; podeEditar: boole
             ) : (
               <ol className="divide-y divide-line/70">
                 {pedidos.map((p, i) => {
-                  const se = STATUS_ENTREGA[p.status_entrega];
+                  const se = situacaoEntrega(p.status_entrega, p.etapa, carga.status === "em_rota");
                   return (
                     <li key={p.id} className="flex items-start gap-3 px-3 py-2.5">
                       <span className="tabular mt-0.5 w-6 shrink-0 text-center text-sm font-semibold text-muted">{p.ordem_entrega}</span>
@@ -315,6 +318,7 @@ export function DetalheCarga({ id, podeEditar }: { id: string; podeEditar: boole
 
       <Dialogo aberto={dialogo === "cancelar"} titulo={`Cancelar carga ${carga.numero}?`} descricao="Os pedidos voltam para aprovados, com o estoque ainda reservado." aoFechar={() => setDialogo(null)}
         rodape={<><Button onClick={() => setDialogo(null)}>Voltar</Button><Button variante="perigo" disabled={ocupado} onClick={async () => { if (await rpc("expedicao_cancelar", { p_expedicao: id }, "Carga cancelada")) setDialogo(null); }}>Cancelar carga</Button></>} />
+      <Roteirizar cargaId={id} aberto={roteirizando} aoFechar={() => setRoteirizando(false)} aoAplicar={carregar} />
     </>
   );
 }

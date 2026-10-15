@@ -122,7 +122,7 @@ export const ENTIDADES: Record<string, Entidade> = {
     modulo: "cadastros",
     trilha: "Cadastros",
     select: "*, rota:rota_id(nome), vendedor:vendedor_id(razao_social)",
-    abas: ["Dados", "Comercial", "Contato"],
+    abas: ["Dados", "Comercial", "Contato", "Equipe"],
     buscaCnpj: true,
     campos: [
       { nome: "tipo_pessoa", rotulo: "Tipo", tipo: "select", obrigatorio: true, padrao: "PJ", aba: "Dados",
@@ -156,6 +156,18 @@ export const ENTIDADES: Record<string, Entidade> = {
       { nome: "whatsapp", rotulo: "WhatsApp", tipo: "telefone", aba: "Contato" },
       { nome: "email", rotulo: "E-mail", tipo: "email", aba: "Contato" },
       { nome: "email_nfe", rotulo: "E-mail para NF-e e boletos", tipo: "email", aba: "Contato" },
+
+      { nome: "cnh_numero", rotulo: "CNH — número", tipo: "texto", aba: "Equipe", ajuda: "Motorista" },
+      { nome: "cnh_categoria", rotulo: "CNH — categoria", tipo: "select", aba: "Equipe",
+        opcoes: ["A", "B", "AB", "C", "D", "E", "AC", "AD", "AE"].map((v) => ({ valor: v, rotulo: v })) },
+      { nome: "cnh_validade", rotulo: "CNH — validade", tipo: "data", aba: "Equipe" },
+      { nome: "veiculo_padrao_id", rotulo: "Veículo do motorista", tipo: "relacao", relacao: { tabela: "veiculos", rotulo: "placa" }, aba: "Equipe" },
+      { nome: "supervisor_id", rotulo: "Supervisor", tipo: "relacao", relacao: { tabela: "pessoas", rotulo: "razao_social", filtro: { eh_vendedor: true } }, aba: "Equipe", ajuda: "Vendedor" },
+      { nome: "regiao", rotulo: "Região de atuação", tipo: "texto", aba: "Equipe" },
+      { nome: "desconto_maximo", rotulo: "Desconto máximo (%)", tipo: "numero", aba: "Equipe", ajuda: "Vendedor" },
+      { nome: "data_admissao", rotulo: "Data de admissão", tipo: "data", aba: "Equipe" },
+      { nome: "chave_pix", rotulo: "Chave PIX (comissão / diárias)", tipo: "texto", largura: 2, aba: "Equipe" },
+      { nome: "contato_emergencia", rotulo: "Contato de emergência", tipo: "texto", largura: 2, aba: "Equipe", ajuda: "Nome e telefone" },
     ],
     colunas: [
       { nome: "codigo", rotulo: "Cód.", tipo: "numero", ordenavel: true },

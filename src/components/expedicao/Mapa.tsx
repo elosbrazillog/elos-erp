@@ -3,13 +3,13 @@ import { useEffect, useRef } from "react";
 import "leaflet/dist/leaflet.css";
 import type * as L from "leaflet";
 
-export type PontoMapa = { lat: number; lng: number; cor: string; raio?: number; titulo: string; destaque?: boolean };
+export type PontoMapa = { lat: number; lng: number; cor: string; raio?: number; titulo: string; destaque?: boolean; rotulo?: string | number };
 export type Trilha = { pontos: [number, number][]; cor: string };
 
 const CENTRO_CAMPO_GRANDE: [number, number] = [-20.4697, -54.6201];
 
 /** Mapa (OpenStreetMap) com pontos coloridos e trilhas; ajusta o enquadramento quando os pontos mudam */
-export function Mapa({ pontos, trilhas, altura = 420 }: { pontos: PontoMapa[]; trilhas: Trilha[]; altura?: number }) {
+export function Mapa({ pontos, trilhas, altura = 420, tracejada }: { pontos: PontoMapa[]; trilhas: Trilha[]; altura?: number; tracejada?: boolean }) {
   const div = useRef<HTMLDivElement>(null);
   const mapa = useRef<L.Map | null>(null);
   const camada = useRef<L.LayerGroup | null>(null);
@@ -39,8 +39,19 @@ export function Mapa({ pontos, trilhas, altura = 420 }: { pontos: PontoMapa[]; t
     const Lf = lib.current, m = mapa.current, g = camada.current;
     if (!Lf || !m || !g) return;
     g.clearLayers();
-    for (const t of trilhas) if (t.pontos.length > 1) Lf.polyline(t.pontos, { color: t.cor, weight: 3, opacity: 0.7 }).addTo(g);
+    for (const t of trilhas) if (t.pontos.length > 1) Lf.polyline(t.pontos, { color: t.cor, weight: 3, opacity: 0.7, dashArray: tracejada ? "6 6" : undefined }).addTo(g);
     for (const p of pontos) {
+      if (p.rotulo !== undefined) {
+        const t = String(p.rotulo).replace(/[^0-9A-Za-z]/g, "").slice(0, 3);
+        Lf.marker([p.lat, p.lng], {
+          icon: Lf.divIcon({
+            className: "",
+            iconSize: [22, 22],
+            html: `<div style="width:22px;height:22px;border-radius:9999px;background:${p.cor};color:#fff;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.35);font:600 11px/18px system-ui;text-align:center">${t}</div>`,
+          }),
+        }).bindTooltip(p.titulo).addTo(g);
+        continue;
+      }
       Lf.circleMarker([p.lat, p.lng], {
         radius: p.raio ?? 7, color: p.destaque ? "#ffffff" : p.cor, weight: p.destaque ? 3 : 2, fillColor: p.cor, fillOpacity: 0.9,
       }).bindTooltip(p.titulo).addTo(g);

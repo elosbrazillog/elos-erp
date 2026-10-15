@@ -70,6 +70,18 @@ export const STATUS_ENTREGA: Record<string, { rotulo: string; tom: Tom }> = {
   ausente: { rotulo: "Cliente ausente", tom: "aviso" },
 };
 
+/** Situação da entrega para rastrear: na rota, a caminho, chegou, entregue, devolvido... */
+export const ETAPA_ENTREGA: Record<string, { rotulo: string; tom: Tom }> = {
+  aguardando: { rotulo: "Na rota", tom: "neutro" },
+  a_caminho: { rotulo: "A caminho", tom: "acento" },
+  chegou: { rotulo: "Chegou no cliente", tom: "aviso" },
+};
+export function situacaoEntrega(status: string, etapa?: string | null, cargaEmRota = true) {
+  if (status !== "pendente") return STATUS_ENTREGA[status] ?? { rotulo: status, tom: "neutro" as Tom };
+  if (!cargaEmRota) return STATUS_ENTREGA.pendente;
+  return ETAPA_ENTREGA[etapa ?? "aguardando"] ?? ETAPA_ENTREGA.aguardando;
+}
+
 /** Endereço em uma linha e link para o mapa */
 export function enderecoTexto(e: { logradouro?: string | null; endereco_numero?: string | null; complemento?: string | null; bairro?: string | null; cidade?: string | null; uf?: string | null }) {
   const rua = [e.logradouro, e.endereco_numero].filter(Boolean).join(", ");

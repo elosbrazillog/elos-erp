@@ -1,12 +1,12 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Check, ChevronDown, CloudOff, LocateFixed, LocateOff, MapPin, MessageCircle, Phone, Undo2 } from "lucide-react";
+import { Check, ChevronDown, CloudOff, LocateFixed, LocateOff, MapPin, MapPinCheck, MessageCircle, Navigation, Phone, Undo2 } from "lucide-react";
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import { Badge, Button, Cabecalho, Card, Label, Select, Textarea, Vazio } from "@/components/ui";
 import { Dialogo } from "@/components/ui/Dialogo";
 import { cn, formatarData, formatarMoeda, formatarNumero, formatarTelefone } from "@/lib/utils";
-import { STATUS_ENTREGA, enderecoTexto, linkMapa, mensagemErro } from "@/lib/pedidos";
+import { enderecoTexto, linkMapa, mensagemErro, situacaoEntrega } from "@/lib/pedidos";
 import type { Carga } from "@/components/expedicao/ListaCargas";
 import { filaPor, filaTodos, kvGet, kvSet, novoId, posicaoAtual, registrarServiceWorker, sincronizar } from "@/lib/offline";
 
@@ -15,7 +15,7 @@ type Entrega = {
   pedido_numero: number; valor_total: number; peso_total_kg: number; observacao: string | null; condicao_nome: string | null; forma_nome: string | null;
   cliente_codigo: number; cliente_nome: string; cliente_fantasia: string | null; telefone: string | null; whatsapp: string | null;
   logradouro: string | null; endereco_numero: string | null; complemento: string | null; bairro: string | null; cidade: string | null; uf: string | null;
-  referencia: string | null; latitude: number | null; longitude: number | null;
+  referencia: string | null; latitude: number | null; longitude: number | null; etapa: string | null;
 };
 type Item = { pedido_id: string; produto_codigo: string; produto_nome: string; unidade: string | null; quantidade: number };
 
@@ -77,8 +77,11 @@ export function Entregas({ motoristaId, cargaInicial, podeRegistrar }: { motoris
     // registros ainda na fila aparecem como feitos
     const fila = await filaTodos();
     setAEnviar(fila.filter((f) => f.tipo === "entrega").length);
-    const naFila = new Map(fila.filter((f) => f.tipo === "entrega").map((f) => [String(f.args.p_expedicao_pedido), String(f.args.p_resultado)]));
-    es = es.map((x) => (naFila.has(x.id) && x.status_entrega === "pendente" ? { ...x, status_entrega: naFila.get(x.id)! } : x));
+    const daFila = fila.filter((f) => f.tipo === "entrega");
+    const naFila = new Map(daFila.filter((f) => f.rpc === "expedicao_registrar_entrega").map((f) => [String(f.args.p_expedicao_pedido), String(f.args.p_resultado)]));
+    const etapas = new Map(daFila.filter((f) => f.rpc === "expedicao_etapa").map((f) => [String(f.args.p_expedicao_pedido), String(f.args.p_etapa)]));
+    es = es.map((x) => (naFila.has(x.id) && x.status_entrega === "pendente" ? { ...x, status_entrega: naFila.get(x.id)! }
+      : etapas.has(x.id) && x.status_entrega === "pendente" ? { ...x, etapa: etapas.get(x.id)! } : x));
     setEntregas(es);
     setItens(its);
     setAberta((a) => a ?? es.find((x) => x.status_entrega === "pendente")?.id ?? null);
@@ -149,6 +152,32 @@ export function Entregas({ motoristaId, cargaInicial, podeRegistrar }: { motoris
     carregar();
   }
 
+  // A caminho / cheguei: avisa o escritório (e guarda no aparelho se estiver sem sinal)
+  async function marcarEtapa(e: Entrega, etapa: "a_caminho" | "chegou") {
+    setOcupado(true);
+    const pos = await posicaoAtual(2500);
+    const args = { p_expedicao_pedido: e.id, p_etapa: etapa, p_lat: pos?.lat ?? null, p_lng: pos?.lng ?? null };
+    const nome = e.cliente_fantasia || e.cliente_nome;
+    const { error } = navigator.onLine ? await supabase.rpc("expedicao_etapa", args) : { error: { message: "Failed to fetch" } };
+    setOcupado(false);
+    if (error && /Failed to fetch|NetworkError|Load failed|network/i.test(error.message)) {
+      await filaPor({ id: novoId(), tipo: "entrega", rpc: "expedicao_etapa", args, criadoEm: new Date().toISOString(), tentativas: 0, resumo: { cliente: nome, etapa } });
+      toast.info(`${nome}: guardado no aparelho.`);
+    } else if (error) {
+      return toast.error("Não foi possível registrar", { description: mensagemErro(error) });
+    } else {
+      toast.success(etapa === "a_caminho" ? `A caminho de ${nome}` : `Chegou em ${nome}`);
+    }
+    setEntregas((es) => es.map((x) => (x.id === e.id ? { ...x, etapa } : etapa === "a_caminho" && x.etapa === "a_caminho" ? { ...x, etapa: "aguardando" } : x)));
+  }
+
+  function avisarCliente(e: Entrega) {
+    const zap = (e.whatsapp || e.telefone || "").replace(/\D/g, "");
+    if (!zap) return;
+    const msg = `Olá, ${e.cliente_fantasia || e.cliente_nome}! Aqui é o entregador da Elos: estou a caminho com o seu pedido nº ${e.pedido_numero}.`;
+    window.open(`https://wa.me/55${zap}?text=${encodeURIComponent(msg)}`, "_blank", "noopener");
+  }
+
   const carga = cargas?.find((c) => c.id === cargaId);
   const pendentes = entregas.filter((e) => e.status_entrega === "pendente").length;
 
@@ -183,7 +212,7 @@ export function Entregas({ motoristaId, cargaInicial, podeRegistrar }: { motoris
           </div>
 
           {entregas.map((e) => {
-            const se = STATUS_ENTREGA[e.status_entrega];
+            const se = situacaoEntrega(e.status_entrega, e.etapa);
             const pendente = e.status_entrega === "pendente";
             const expandida = aberta === e.id;
             const mapa = linkMapa(e);
@@ -200,7 +229,7 @@ export function Entregas({ motoristaId, cargaInicial, podeRegistrar }: { motoris
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">
                       <span className="tabular font-medium">{formatarMoeda(e.valor_total)}</span>
                       {e.forma_nome && <span className="text-muted">· {e.forma_nome}{e.condicao_nome ? ` ${e.condicao_nome}` : ""}</span>}
-                      {!pendente && <Badge tom={se.tom}>{se.rotulo}</Badge>}
+                      {(!pendente || (e.etapa && e.etapa !== "aguardando")) && <Badge tom={se.tom}>{se.rotulo}</Badge>}
                     </div>
                   </div>
                   <ChevronDown size={18} className={cn("mt-1 shrink-0 text-muted transition-transform", expandida && "rotate-180")} />
@@ -227,6 +256,15 @@ export function Entregas({ motoristaId, cargaInicial, podeRegistrar }: { motoris
                       </ul>
                     </div>
                     {e.motivo_devolucao && <p className="text-sm text-warn">{e.motivo_devolucao}</p>}
+                    {pendente && podeRegistrar && (e.etapa ?? "aguardando") === "aguardando" && (
+                      <Button className="h-11 w-full" disabled={ocupado} onClick={() => marcarEtapa(e, "a_caminho")}><Navigation size={16} /> Ir para este cliente (a caminho)</Button>
+                    )}
+                    {pendente && podeRegistrar && e.etapa === "a_caminho" && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button className="h-11" disabled={!zap} onClick={() => avisarCliente(e)}><MessageCircle size={16} /> Avisar cliente</Button>
+                        <Button className="h-11" disabled={ocupado} onClick={() => marcarEtapa(e, "chegou")}><MapPinCheck size={16} /> Cheguei</Button>
+                      </div>
+                    )}
                     {pendente && podeRegistrar && (
                       <div className="grid grid-cols-2 gap-2 pt-1">
                         <Button variante="perigo" className="h-11" disabled={ocupado} onClick={() => { setTipo("devolvido_total"); setMotivo(""); setNaoEntregue(e); }}><Undo2 size={16} /> Não entregue</Button>

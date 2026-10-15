@@ -7,7 +7,7 @@ import { Clock, MessageCircle, Phone, RefreshCw, Truck } from "lucide-react";
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import { Badge, Button, Cabecalho, Card, Vazio } from "@/components/ui";
 import { cn, formatarMoeda } from "@/lib/utils";
-import { STATUS_ENTREGA, enderecoTexto, mensagemErro } from "@/lib/pedidos";
+import { enderecoTexto, mensagemErro, situacaoEntrega } from "@/lib/pedidos";
 import type { PontoMapa, Trilha } from "@/components/expedicao/Mapa";
 
 const Mapa = dynamic(() => import("@/components/expedicao/Mapa").then((m) => m.Mapa), { ssr: false, loading: () => <div className="h-[420px] animate-pulse rounded-lg bg-surface-2" /> });
@@ -16,16 +16,17 @@ type Carga = {
   id: string; numero: number; status: string; saiu_em: string | null; concluida_em: string | null; rota_nome: string | null;
   motorista_nome: string | null; motorista_whatsapp: string | null; motorista_telefone: string | null; veiculo_placa: string | null;
   qtd_pedidos: number; entregues: number; pendentes: number; nao_entregues: number; ultima_entrega_em: string | null;
-  ultima_latitude: number | null; ultima_longitude: number | null; ultima_posicao_em: string | null;
+  ultima_latitude: number | null; ultima_longitude: number | null; ultima_posicao_em: string | null; a_caminho?: number; no_cliente?: number;
 };
 type Entrega = {
   id: string; expedicao_id: string; ordem_entrega: number; status_entrega: string; entregue_em: string | null; motivo_devolucao: string | null;
   pedido_numero: number; valor_total: number; cliente_nome: string; cliente_fantasia: string | null; telefone: string | null; whatsapp: string | null;
   logradouro: string | null; endereco_numero: string | null; bairro: string | null; cidade: string | null; uf: string | null;
   latitude: number | null; longitude: number | null; entrega_latitude: number | null; entrega_longitude: number | null;
+  etapa: string | null; a_caminho_em: string | null; chegou_em: string | null;
 };
 
-const COR = { caminhao: "#0b6e8a", entregue: "#1d7f4e", problema: "#c0352b", pendente: "#8a97a6" };
+const COR = { caminhao: "#0b6e8a", entregue: "#1d7f4e", problema: "#c0352b", pendente: "#8a97a6", a_caminho: "#0b6e8a", chegou: "#b26a00" };
 const hora = (v: string | null) => (v ? new Date(v).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "");
 function haQuanto(v: string | null) {
   if (!v) return null;
@@ -80,8 +81,10 @@ export function Acompanhamento() {
     for (const e of entregas.filter((x) => x.expedicao_id === c.id)) {
       const lat = e.entrega_latitude ?? e.latitude, lng = e.entrega_longitude ?? e.longitude;
       if (lat === null || lng === null) continue;
-      const cor = e.status_entrega === "entregue" ? COR.entregue : e.status_entrega === "pendente" ? COR.pendente : COR.problema;
-      pontos.push({ lat: Number(lat), lng: Number(lng), cor, titulo: `${e.ordem_entrega}. ${e.cliente_fantasia || e.cliente_nome} · ${STATUS_ENTREGA[e.status_entrega].rotulo}` });
+      const cor = e.status_entrega === "entregue" ? COR.entregue : e.status_entrega !== "pendente" ? COR.problema
+        : e.etapa === "chegou" ? COR.chegou : e.etapa === "a_caminho" ? COR.a_caminho : COR.pendente;
+      pontos.push({ lat: Number(lat), lng: Number(lng), cor, rotulo: e.ordem_entrega,
+        titulo: `${e.ordem_entrega}. ${e.cliente_fantasia || e.cliente_nome} · ${situacaoEntrega(e.status_entrega, e.etapa, c.status === "em_rota").rotulo}` });
     }
     if (c.ultima_latitude !== null && c.ultima_longitude !== null && c.status === "em_rota") {
       pontos.push({ lat: Number(c.ultima_latitude), lng: Number(c.ultima_longitude), cor: COR.caminhao, raio: 10, destaque: true,
@@ -118,7 +121,7 @@ export function Acompanhamento() {
             <div className="space-y-3">
               <Mapa pontos={pontos} trilhas={trilhasMapa} />
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
-                {[["Caminhão (última posição)", COR.caminhao], ["Entregue", COR.entregue], ["Não entregue", COR.problema], ["A entregar", COR.pendente]].map(([r, c]) => (
+                {[["Caminhão (última posição)", COR.caminhao], ["Na rota", COR.pendente], ["A caminho", COR.a_caminho], ["Chegou", COR.chegou], ["Entregue", COR.entregue], ["Não entregue", COR.problema]].map(([r, c]) => (
                   <span key={r} className="flex items-center gap-1.5"><span className="inline-block size-2.5 rounded-full" style={{ background: c }} />{r}</span>
                 ))}
                 {semCoordenada > 0 && <span>· {semCoordenada} {semCoordenada === 1 ? "cliente ainda sem localização" : "clientes ainda sem localização"} (o sistema aprende na primeira entrega)</span>}
@@ -156,7 +159,7 @@ export function Acompanhamento() {
                         <div className="h-full bg-bad" style={{ width: `${(c.nao_entregues / Math.max(1, c.qtd_pedidos)) * 100}%` }} />
                       </div>
                       <div className="mt-1 flex flex-wrap justify-between gap-2 text-xs text-muted">
-                        <span>{c.entregues} entregues · {c.nao_entregues} não entregues · {c.pendentes} a entregar</span>
+                        <span>{c.entregues} entregues · {c.nao_entregues} não entregues · {c.pendentes} a entregar{c.a_caminho ? " · 1 a caminho" : ""}{c.no_cliente ? ` · ${c.no_cliente} no cliente` : ""}</span>
                         {c.status === "em_rota" && (
                           <span className={cn("flex items-center gap-1", semSinal && "text-warn")}>
                             <Truck size={12} /> {c.ultima_posicao_em ? `posição ${haQuanto(c.ultima_posicao_em)}` : "sem posição ainda"}
@@ -172,7 +175,7 @@ export function Acompanhamento() {
                     </div>
                     <ol className="divide-y divide-line/70">
                       {minhas.map((e) => {
-                        const st = STATUS_ENTREGA[e.status_entrega];
+                        const st = situacaoEntrega(e.status_entrega, e.etapa, c.status === "em_rota");
                         return (
                           <li key={e.id} className="flex items-start gap-2.5 px-3 py-2 text-sm">
                             <span className={cn("tabular mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
@@ -181,6 +184,13 @@ export function Acompanhamento() {
                               <div className="truncate">{e.cliente_fantasia || e.cliente_nome}</div>
                               <div className="truncate text-xs text-muted">{enderecoTexto(e) || "Sem endereço"}</div>
                               {e.motivo_devolucao && e.status_entrega !== "entregue" && <div className="text-xs text-bad">{e.motivo_devolucao}</div>}
+                              {(e.a_caminho_em || e.chegou_em) && (
+                                <div className="text-[11px] text-muted">
+                                  {e.a_caminho_em && <>saiu para o cliente {hora(e.a_caminho_em)}</>}
+                                  {e.chegou_em && <>{e.a_caminho_em ? " · " : ""}chegou {hora(e.chegou_em)}</>}
+                                  {e.chegou_em && e.entregue_em && <> · {Math.max(0, Math.round((new Date(e.entregue_em).getTime() - new Date(e.chegou_em).getTime()) / 60000))} min no cliente</>}
+                                </div>
+                              )}
                             </div>
                             <div className="shrink-0 text-right text-xs">
                               <div className="tabular text-sm">{formatarMoeda(e.valor_total)}</div>
