@@ -118,7 +118,7 @@ function Conteudo({ d, seletor }: { d: Dados; seletor: React.ReactNode }) {
   return (
     <>
       {/* Faixa preta da marca: faturamento, a régua da meta e o dia a dia */}
-      <section className="bg-black px-4 pt-6 pb-16 text-white lg:px-8 xl:rounded-b-2xl">
+      <section className="bg-black px-4 pt-6 pb-16 text-white lg:px-8 lg:rounded-br-3xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-lg font-semibold">Gestão geral</h1>
