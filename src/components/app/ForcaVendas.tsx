@@ -761,7 +761,7 @@ function Anel({ pct }: { pct: number | null }) {
         {p > 0 && <circle cx="40" cy="40" r={r} fill="none" stroke={p >= 1 ? "var(--ok)" : "var(--accent)"} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${c * p} ${c}`} />}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="tabular text-lg leading-none font-semibold">{pct === null ? "—" : `${Math.round(pct)}%`}</span>
+        <span className="tabular text-lg leading-none font-semibold">{pct === null ? "—" : pct > 0 && pct < 1 ? "<1%" : `${Math.round(pct)}%`}</span>
         <span className="mt-0.5 text-[10px] text-muted">da meta</span>
       </div>
     </div>
