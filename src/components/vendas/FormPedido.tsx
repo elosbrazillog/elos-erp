@@ -20,7 +20,7 @@ type Pedido = {
   vendedor_id: string | null; rota_id: string | null; tabela_preco_id: string | null; condicao_pagamento_id: string | null;
   forma_pagamento_id: string | null; deposito_id: string | null; data_entrega: string | null; validade: string | null;
   valor_produtos: number; valor_desconto: number; valor_frete: number; valor_total: number; peso_total_kg: number;
-  motivo_trava: string | null; motivo_cancelamento: string | null; credito_liberado_em: string | null;
+  motivo_trava: string | null; motivo_cancelamento: string | null; credito_liberado_em: string | null; faturado_em: string | null;
   pedido_cliente: string | null; observacao: string | null; observacao_nfe: string | null; qtd_itens: number;
 };
 type Item = {
@@ -261,9 +261,10 @@ function EditarPedido({ id, podeEditar, podeExcluir, podeCredito }: { id: string
     acoes.push(<Button key="lib" variante="primario" disabled={ocupado} onClick={() => executar(() => supabase.rpc("pedido_liberar_credito", { p_pedido: id }), "Crédito liberado, pedido aprovado")}><CheckCircle2 size={16} /> Liberar crédito</Button>);
     acoes.push(<Button key="rec" variante="perigo" disabled={ocupado} onClick={() => { setMotivo(""); setDialogo("recusar"); }}><XCircle size={16} /> Recusar</Button>);
   }
-  if ((pedido.status === "aguardando_credito" || pedido.status === "aprovado") && podeEditar)
+  const faturado = !!pedido.faturado_em;
+  if ((pedido.status === "aguardando_credito" || pedido.status === "aprovado") && podeEditar && !faturado)
     acoes.push(<Button key="reab" disabled={ocupado} onClick={() => executar(() => supabase.rpc("pedido_reabrir", { p_pedido: id }), "Pedido reaberto. A reserva de estoque foi devolvida.")}><Undo2 size={16} /> Reabrir</Button>);
-  if (["rascunho", "aguardando_credito", "aprovado", "em_separacao"].includes(pedido.status) && podeEditar && !(rascunho && pedido.tipo === "orcamento"))
+  if (["rascunho", "aguardando_credito", "aprovado", "em_separacao"].includes(pedido.status) && podeEditar && !faturado && !(rascunho && pedido.tipo === "orcamento"))
     acoes.push(<Button key="canc" variante="perigo" disabled={ocupado} onClick={() => { setMotivo(""); setDialogo("cancelar"); }}><Ban size={16} /> Cancelar</Button>);
   if (rascunho && podeExcluir)
     acoes.push(<Button key="exc" variante="fantasma" disabled={ocupado} onClick={() => setDialogo("excluir")} aria-label="Excluir"><Trash2 size={16} /></Button>);
@@ -286,6 +287,7 @@ function EditarPedido({ id, podeEditar, podeExcluir, podeCredito }: { id: string
 
       <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
         <Badge tom={st.tom}>{st.rotulo}</Badge>
+        {faturado && <Badge tom="acento">Faturado em {formatarData(pedido.faturado_em)}</Badge>}
         <span className="text-muted">Emitido em {formatarData(pedido.data_emissao)}</span>
         {pedido.credito_liberado_em && <span className="text-muted">· crédito liberado em {formatarData(pedido.credito_liberado_em)}</span>}
       </div>

@@ -11,3 +11,4 @@ $P -d t -f tests/teste_financeiro.sql
 $P -d t -f tests/teste_relatorios.sql
 $P -d t -f tests/teste_forca_vendas.sql
 $P -d t -f tests/teste_metas.sql
+$P -d t -f tests/teste_faturamento.sql

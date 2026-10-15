@@ -59,6 +59,7 @@ export const MENU: GrupoMenu[] = [
     modulo: "fiscal",
     icone: "file",
     itens: [
+      { titulo: "Faturamento", rota: "/fiscal/faturamento", pronto: true },
       { titulo: "Notas emitidas", rota: "/fiscal/notas", pronto: false },
       { titulo: "Grupos tributários", rota: "/cadastros/grupos-tributarios", pronto: true },
     ],

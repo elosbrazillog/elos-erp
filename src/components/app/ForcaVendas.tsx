@@ -6,7 +6,7 @@ import {
   Repeat, Search, ShoppingCart, Target, Trash2, Users, X,
 } from "lucide-react";
 import { criarClienteNavegador } from "@/lib/supabase/client";
-import { Badge, Button, Input, Label, Textarea } from "@/components/ui";
+import { Badge, Button, Input, Label, Select, Textarea } from "@/components/ui";
 import { Dialogo } from "@/components/ui/Dialogo";
 import { cn, formatarData, formatarMoeda, formatarNumero } from "@/lib/utils";
 import { STATUS_PEDIDO, type StatusPedido } from "@/lib/pedidos";
@@ -21,17 +21,29 @@ type Cliente = {
   limite_credito: number; em_aberto: number; em_atraso: number;
   ultimo_pedido_data: string | null; ultimo_pedido_numero: number | null; ultimo_pedido_valor: number | null;
   ultimo_itens: { produto_id: string; quantidade: number }[] | null; visita_hoje: "pedido" | "sem_pedido" | null;
+  condicao_pagamento_id?: string | null; forma_pagamento_id?: string | null;
 };
 type Produto = { id: string; codigo: string; nome: string; unidade: string | null; categoria: string | null; foto_url: string | null;
   preco_venda: number; preco_minimo: number | null; disponivel: number; unidades_por_caixa: number | null };
 type Preco = { tabela_preco_id: string; produto_id: string; preco: number; preco_minimo: number | null };
 type PedidoResumo = { id: string; numero: number; status: StatusPedido; data_emissao: string; cliente_nome: string; cliente_fantasia: string | null;
-  valor_total: number; motivo_trava: string | null; origem: string };
+  valor_total: number; motivo_trava: string | null; origem: string; faturado_em?: string | null; forma_nome?: string | null; condicao_nome?: string | null };
+type Pagamentos = { condicoes: { id: string; nome: string }[]; formas: { id: string; nome: string; gera_boleto: boolean }[] };
+type DetalhePedido = {
+  id: string; numero: number; status: StatusPedido; data_emissao: string; data_entrega: string | null; cliente_id: string; cliente_nome: string;
+  condicao_pagamento_id: string | null; condicao_nome: string | null; forma_pagamento_id: string | null; forma_nome: string | null;
+  observacao: string | null; motivo_trava: string | null; valor_total: number; faturado_em: string | null; origem: string; pode_alterar: boolean;
+  itens: { produto_id: string; codigo: string; nome: string; quantidade: number; preco: number; total: number }[];
+  titulos: { parcela: number; total_parcelas: number; valor: number; vencimento: string; quitado: boolean }[];
+};
 type Resumo = { vendedor: string | null; vendido: number; pedidos: number; clientes_positivados: number; carteira: number; meta: number | null;
   comissao_percentual: number | null; comissao_prevista: number | null; visitas_sem_pedido: number; dias_uteis_mes: number; dias_uteis_passados: number;
   meta_da_empresa?: boolean; vendedores?: { nome: string; meta: number | null; vendido: number; pedidos: number }[] | null };
-type Dados = { carteira: Cliente[]; produtos: Produto[]; precos: Preco[]; pedidos: PedidoResumo[]; resumo: Resumo | null; atualizadoEm: string };
-type Carrinho = { clienteId: string | null; itens: Record<string, { qtd: number; preco: number }>; obs: string; entrega: string };
+type Dados = { carteira: Cliente[]; produtos: Produto[]; precos: Preco[]; pedidos: PedidoResumo[]; resumo: Resumo | null; pagamentos?: Pagamentos; atualizadoEm: string };
+type Carrinho = {
+  clienteId: string | null; itens: Record<string, { qtd: number; preco: number }>; obs: string; entrega: string;
+  condicaoId?: string | null; formaId?: string | null; editando?: { pedidoId: string; numero: number } | null;
+};
 
 type Aba = "rota" | "clientes" | "pedido" | "pedidos" | "meta";
 const VAZIO: Carrinho = { clienteId: null, itens: {}, obs: "", entrega: "" };
@@ -63,21 +75,23 @@ export function ForcaVendas({ nome, podeCriar }: { nome: string; podeCriar: bool
   const baixar = useCallback(async (silencioso = false) => {
     if (!navigator.onLine) { if (!silencioso) toast.info("Sem sinal. Usando os dados guardados no aparelho."); return; }
     setBaixando(true);
-    const desde = new Date(Date.now() - 45 * 864e5).toISOString();
-    const [c, p, pr, pe, re] = await Promise.all([
+    const desde = new Date(Date.now() - 90 * 864e5).toISOString();
+    const [c, p, pr, pe, re, pg] = await Promise.all([
       supabase.rpc("app_carteira"),
       supabase.rpc("app_produtos"),
       supabase.from("tabelas_preco_itens").select("tabela_preco_id, produto_id, preco, preco_minimo").eq("ativo", true).limit(20000),
-      supabase.from("vw_pedidos").select("id, numero, status, data_emissao, cliente_nome, cliente_fantasia, valor_total, motivo_trava, origem")
-        .eq("tipo", "pedido").eq("ativo", true).gte("data_emissao", desde).order("numero", { ascending: false }).limit(300),
+      supabase.from("vw_pedidos").select("id, numero, status, data_emissao, cliente_nome, cliente_fantasia, valor_total, motivo_trava, origem, faturado_em, forma_nome, condicao_nome")
+        .eq("tipo", "pedido").eq("ativo", true).gte("data_emissao", desde).order("numero", { ascending: false }).limit(500),
       supabase.rpc("app_resumo"),
+      supabase.rpc("app_pagamentos"),
     ]);
     setBaixando(false);
-    const erro = c.error ?? p.error ?? pr.error ?? pe.error ?? re.error;
+    const erro = c.error ?? p.error ?? pr.error ?? pe.error ?? re.error ?? pg.error;
     if (erro) { if (!silencioso) toast.error("Não foi possível atualizar", { description: erro.message }); return; }
     const novo: Dados = {
       carteira: (c.data ?? []) as Cliente[], produtos: (p.data ?? []) as Produto[], precos: (pr.data ?? []) as Preco[],
-      pedidos: (pe.data ?? []) as PedidoResumo[], resumo: (re.data ?? null) as Resumo | null, atualizadoEm: new Date().toISOString(),
+      pedidos: (pe.data ?? []) as PedidoResumo[], resumo: (re.data ?? null) as Resumo | null,
+      pagamentos: (pg.data ?? { condicoes: [], formas: [] }) as Pagamentos, atualizadoEm: new Date().toISOString(),
     };
     setDados(novo);
     await kvSet("dados", novo);
@@ -87,9 +101,12 @@ export function ForcaVendas({ nome, podeCriar }: { nome: string; podeCriar: bool
   const enviarFila = useCallback(async () => {
     const r = await sincronizar(supabase, (item, resp) => {
       if (item.tipo === "pedido") {
-        const x = resp as { numero: number; status: string; motivo: string | null };
+        const x = resp as { numero: number; status: string; motivo: string | null; saiu_da_carga?: boolean };
         const nomeCli = String(item.resumo.cliente ?? "");
-        if (x?.status === "aprovado") toast.success(`Pedido ${x.numero} de ${nomeCli} aprovado`);
+        if (item.rpc === "app_alterar_pedido" && x?.status === "aprovado") {
+          toast.success(`Pedido ${x.numero} de ${nomeCli} alterado e aprovado`,
+            { description: x.saiu_da_carga ? "Ele estava numa carga em montagem e saiu dela: a expedição precisa incluí-lo de novo." : undefined, duration: x.saiu_da_carga ? 10000 : 4000 });
+        } else if (x?.status === "aprovado") toast.success(`Pedido ${x.numero} de ${nomeCli} aprovado`);
         else if (x?.status === "aguardando_credito") toast.warning(`Pedido ${x.numero} de ${nomeCli} aguardando crédito`, { description: x.motivo ?? undefined });
         else toast.warning(`Pedido ${x?.numero} de ${nomeCli} ficou para o escritório`, { description: x?.motivo ?? undefined, duration: 10000 });
       }
@@ -154,18 +171,31 @@ export function ForcaVendas({ nome, podeCriar }: { nome: string; podeCriar: bool
     if (!cliente) return;
     const itens = Object.entries(carrinho.itens).filter(([, i]) => i.qtd > 0);
     if (!itens.length) return toast.error("Inclua ao menos um produto");
-    const pos = await posicaoAtual(2500);
     const idLocal = novoId();
     const total = itens.reduce((a, [, i]) => a + i.qtd * i.preco, 0);
-    await filaPor({
-      id: idLocal, tipo: "pedido", rpc: "app_enviar_pedido", criadoEm: new Date().toISOString(), tentativas: 0,
-      args: {
-        p_id_local: idLocal, p_cliente: cliente.id, p_observacao: carrinho.obs || null, p_data_entrega: carrinho.entrega || null,
-        p_itens: itens.map(([produto_id, i]) => ({ produto_id, quantidade: i.qtd, preco: i.preco })),
-        p_lat: pos?.lat ?? null, p_lng: pos?.lng ?? null,
-      },
-      resumo: { cliente: cliente.nome, total: r2(total), itens: itens.length },
-    });
+    const pItens = itens.map(([produto_id, i]) => ({ produto_id, quantidade: i.qtd, preco: i.preco }));
+    if (carrinho.editando) {
+      await filaPor({
+        id: idLocal, tipo: "pedido", rpc: "app_alterar_pedido", criadoEm: new Date().toISOString(), tentativas: 0,
+        args: {
+          p_pedido: carrinho.editando.pedidoId, p_id_envio: idLocal, p_itens: pItens,
+          p_condicao: carrinho.condicaoId ?? null, p_forma: carrinho.formaId ?? null,
+          p_observacao: carrinho.obs || null, p_data_entrega: carrinho.entrega || null,
+        },
+        resumo: { cliente: cliente.nome, total: r2(total), itens: itens.length, alteracao: carrinho.editando.numero },
+      });
+    } else {
+      const pos = await posicaoAtual(2500);
+      await filaPor({
+        id: idLocal, tipo: "pedido", rpc: "app_enviar_pedido", criadoEm: new Date().toISOString(), tentativas: 0,
+        args: {
+          p_id_local: idLocal, p_cliente: cliente.id, p_observacao: carrinho.obs || null, p_data_entrega: carrinho.entrega || null,
+          p_itens: pItens, p_lat: pos?.lat ?? null, p_lng: pos?.lng ?? null,
+          p_condicao: carrinho.condicaoId ?? null, p_forma: carrinho.formaId ?? null,
+        },
+        resumo: { cliente: cliente.nome, total: r2(total), itens: itens.length },
+      });
+    }
     setDados((d) => d && { ...d, carteira: d.carteira.map((x) => (x.id === cliente.id ? { ...x, visita_hoje: "pedido" } : x)) });
     setCarrinho(VAZIO);
     await recarregarFila();
@@ -176,6 +206,19 @@ export function ForcaVendas({ nome, podeCriar }: { nome: string; podeCriar: bool
     } else {
       toast.info("Sem sinal: pedido guardado no aparelho. Sobe sozinho quando o sinal voltar.");
     }
+  }
+
+  function alterarPedido(d: DetalhePedido) {
+    if (!dados?.carteira.some((c) => c.id === d.cliente_id)) return toast.error("Este cliente não está na sua carteira");
+    if (qtdItens > 0 && !confirm("Há um pedido em andamento. Descartar e alterar o pedido nº " + d.numero + "?")) return;
+    const itens: Carrinho["itens"] = {};
+    for (const i of d.itens) itens[i.produto_id] = { qtd: Number(i.quantidade), preco: Number(i.preco) };
+    setCarrinho({
+      clienteId: d.cliente_id, itens, obs: d.observacao ?? "", entrega: d.data_entrega ?? "",
+      condicaoId: d.condicao_pagamento_id, formaId: d.forma_pagamento_id, editando: { pedidoId: d.id, numero: d.numero },
+    });
+    setAba("pedido");
+    toast.info(`Alterando o pedido nº ${d.numero}. Mude o que precisar e envie.`);
   }
 
   return (
@@ -205,7 +248,7 @@ export function ForcaVendas({ nome, podeCriar }: { nome: string; podeCriar: bool
               <AbaPedido dados={dados} cliente={cliente} carrinho={carrinho} setCarrinho={setCarrinho} produtoPorId={produtoPorId}
                 precoDe={precoDe} podeCriar={podeCriar} onEscolherCliente={() => setAba("clientes")} onEnviar={async () => { await enviarPedido(); }} />
             )}
-            {aba === "pedidos" && <AbaPedidos dados={dados} fila={fila} onTentar={enviarFila} recarregar={recarregarFila} />}
+            {aba === "pedidos" && <AbaPedidos dados={dados} fila={fila} onTentar={enviarFila} recarregar={recarregarFila} onAlterar={alterarPedido} />}
             {aba === "meta" && <AbaMeta dados={dados} />}
             <p className="mt-6 text-center text-[11px] text-muted">Atualizado em {new Date(dados.atualizadoEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</p>
           </>
@@ -357,6 +400,12 @@ function AbaPedido({ dados, cliente, carrinho, setCarrinho, produtoPorId, precoD
   const lista = dados.produtos.filter((p) => (!categoria || p.categoria === categoria) && (!t || t.split(/\s+/).every((x) => norm(`${p.codigo} ${p.nome}`).includes(x))));
   const itens = Object.entries(carrinho.itens).filter(([, i]) => i.qtd > 0);
   const total = itens.reduce((a, [, i]) => a + i.qtd * i.preco, 0);
+  const pg = dados.pagamentos ?? { condicoes: [], formas: [] };
+  const condId = carrinho.condicaoId ?? cliente.condicao_pagamento_id ?? null;
+  const formaId = carrinho.formaId ?? cliente.forma_pagamento_id ?? null;
+  const condNome = pg.condicoes.find((c) => c.id === condId)?.nome ?? cliente.condicao_nome;
+  const formaNome = pg.formas.find((f) => f.id === formaId)?.nome ?? cliente.forma_nome;
+  const pagamentoTexto = [condNome, formaNome].filter(Boolean).join(" · ") || "Pagamento padrão do cliente";
 
   function mudar(p: Produto, qtd: number) {
     const q = Math.max(0, Math.round(qtd * 1000) / 1000);
@@ -383,13 +432,19 @@ function AbaPedido({ dados, cliente, carrinho, setCarrinho, produtoPorId, precoD
 
   return (
     <>
+      {carrinho.editando && (
+        <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-accent/40 bg-accent-soft px-3 py-2 text-sm">
+          <span>Alterando o pedido <b>nº {carrinho.editando.numero}</b></span>
+          <Button tamanho="p" variante="fantasma" onClick={() => { if (confirm("Desistir da alteração? O pedido fica como estava.")) setCarrinho(VAZIO); }}>Desistir</Button>
+        </div>
+      )}
       <div className="mb-3 rounded-lg border border-line bg-surface p-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="font-medium">{cliente.nome}</div>
-            <div className="text-xs text-muted">{[cliente.condicao_nome, cliente.forma_nome].filter(Boolean).join(" · ") || "Pagamento padrão"}</div>
+            <div className="text-xs text-muted">{pagamentoTexto}</div>
           </div>
-          <button onClick={() => setCarrinho(VAZIO)} className="rounded p-1 text-muted hover:text-ink" aria-label="Trocar cliente"><X size={18} /></button>
+          {!carrinho.editando && <button onClick={() => setCarrinho(VAZIO)} className="rounded p-1 text-muted hover:text-ink" aria-label="Trocar cliente"><X size={18} /></button>}
         </div>
         {(cliente.bloqueado || Number(cliente.em_atraso) > 0) && (
           <div className="mt-2 flex items-start gap-1.5 rounded bg-bad/5 p-2 text-xs text-bad">
@@ -453,11 +508,11 @@ function AbaPedido({ dados, cliente, carrinho, setCarrinho, produtoPorId, precoD
         </div>
       )}
 
-      <Dialogo aberto={revisando} titulo={`Pedido · ${cliente.nome}`} aoFechar={() => setRevisando(false)}
+      <Dialogo aberto={revisando} titulo={carrinho.editando ? `Alterar pedido nº ${carrinho.editando.numero}` : `Pedido · ${cliente.nome}`} descricao={carrinho.editando ? cliente.nome : undefined} aoFechar={() => setRevisando(false)}
         rodape={<>
           <Button onClick={() => setRevisando(false)}>Voltar</Button>
           <Button variante="primario" disabled={enviando || !itens.length} onClick={async () => { setEnviando(true); await onEnviar(); setEnviando(false); setRevisando(false); }}>
-            <Check size={16} /> {enviando ? "Enviando..." : "Enviar pedido"}
+            <Check size={16} /> {enviando ? "Enviando..." : carrinho.editando ? "Salvar alteração" : "Enviar pedido"}
           </Button>
         </>}>
         <ul className="mb-3 divide-y divide-line/70">
@@ -485,6 +540,25 @@ function AbaPedido({ dados, cliente, carrinho, setCarrinho, produtoPorId, precoD
         </ul>
         <div className="mb-3 flex justify-between border-t border-line pt-2 text-base font-semibold"><span>Total</span><span className="tabular">{formatarMoeda(total)}</span></div>
         <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label htmlFor="ped-cond">Condição</Label>
+              <Select id="ped-cond" value={condId ?? ""} onChange={(e) => setCarrinho((c) => ({ ...c, condicaoId: e.target.value || null }))}>
+                {!condId && <option value="">Padrão do cliente</option>}
+                {pg.condicoes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="ped-forma">Forma de pagamento</Label>
+              <Select id="ped-forma" value={formaId ?? ""} onChange={(e) => setCarrinho((c) => ({ ...c, formaId: e.target.value || null }))}>
+                {!formaId && <option value="">Padrão do cliente</option>}
+                {pg.formas.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+              </Select>
+            </div>
+          </div>
+          {(condId !== (cliente.condicao_pagamento_id ?? null) || formaId !== (cliente.forma_pagamento_id ?? null)) && (cliente.condicao_nome || cliente.forma_nome) && (
+            <p className="text-xs text-muted">Padrão do cliente: {[cliente.condicao_nome, cliente.forma_nome].filter(Boolean).join(" · ")}. Prazo maior pode mandar o pedido para aprovação de crédito.</p>
+          )}
           <div><Label htmlFor="ped-entrega">Entrega desejada</Label><Input id="ped-entrega" type="date" min={hojeIso()} value={carrinho.entrega} onChange={(e) => setCarrinho((c) => ({ ...c, entrega: e.target.value }))} /></div>
           <div><Label htmlFor="ped-obs">Observação</Label><Textarea id="ped-obs" className="min-h-16" value={carrinho.obs} onChange={(e) => setCarrinho((c) => ({ ...c, obs: e.target.value }))} /></div>
         </div>
@@ -494,7 +568,44 @@ function AbaPedido({ dados, cliente, carrinho, setCarrinho, produtoPorId, precoD
 }
 
 // ---------------------------------------------------------------------
-function AbaPedidos({ dados, fila, onTentar, recarregar }: { dados: Dados; fila: ItemFila[]; onTentar: () => Promise<unknown>; recarregar: () => Promise<void> }) {
+const FILTROS_PEDIDO = [
+  ["todos", "Todos"], ["abertos", "Em aberto"], ["faturados", "Faturados"], ["entregues", "Entregues"], ["problema", "Com pendência"],
+] as const;
+type FiltroPedido = (typeof FILTROS_PEDIDO)[number][0];
+
+function AbaPedidos({ dados, fila, onTentar, recarregar, onAlterar }: {
+  dados: Dados; fila: ItemFila[]; onTentar: () => Promise<unknown>; recarregar: () => Promise<void>; onAlterar: (d: DetalhePedido) => void;
+}) {
+  const supabase = useMemo(() => criarClienteNavegador(), []);
+  const [busca, setBusca] = useState("");
+  const [filtro, setFiltro] = useState<FiltroPedido>("todos");
+  const [aberto, setAberto] = useState<PedidoResumo | null>(null);
+  const [detalhe, setDetalhe] = useState<DetalhePedido | null>(null);
+  const [carregando, setCarregando] = useState(false);
+
+  async function abrir(p: PedidoResumo) {
+    setAberto(p);
+    setDetalhe(null);
+    if (!navigator.onLine) return;
+    setCarregando(true);
+    const { data, error } = await supabase.rpc("app_pedido", { p_pedido: p.id });
+    setCarregando(false);
+    if (error) return toast.error("Não foi possível abrir o pedido", { description: error.message });
+    setDetalhe(data as DetalhePedido);
+  }
+
+  const t = norm(busca.trim());
+  const lista = dados.pedidos.filter((p) => {
+    if (t && !t.split(/\s+/).every((x) => norm(`${p.numero} ${p.cliente_nome} ${p.cliente_fantasia ?? ""}`).includes(x))) return false;
+    if (filtro === "abertos") return ["rascunho", "aguardando_credito", "aprovado", "em_separacao"].includes(p.status) && !p.faturado_em;
+    if (filtro === "faturados") return !!p.faturado_em;
+    if (filtro === "entregues") return p.status === "entregue";
+    if (filtro === "problema") return ["rascunho", "aguardando_credito", "devolvido"].includes(p.status);
+    return true;
+  });
+  const totalLista = lista.reduce((a, p) => a + Number(p.valor_total), 0);
+  const st = aberto ? STATUS_PEDIDO[detalhe?.status ?? aberto.status] : null;
+
   return (
     <>
       {fila.length > 0 && (
@@ -508,7 +619,9 @@ function AbaPedidos({ dados, fila, onTentar, recarregar }: { dados: Dados; fila:
               <li key={f.id} className={cn("rounded-lg border bg-surface p-3 text-sm", f.erro ? "border-bad/40" : "border-warn/40")}>
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <div className="font-medium">{f.tipo === "pedido" ? "Pedido" : "Visita"} · {String(f.resumo.cliente ?? "")}</div>
+                    <div className="font-medium">
+                      {f.tipo === "pedido" ? (f.resumo.alteracao ? `Alteração do pedido ${f.resumo.alteracao}` : "Pedido") : "Visita"} · {String(f.resumo.cliente ?? "")}
+                    </div>
                     <div className="text-xs text-muted">
                       {f.tipo === "pedido" ? `${f.resumo.itens} itens · ${formatarMoeda(f.resumo.total)}` : String(f.resumo.motivo ?? "")}
                       {" · "}{new Date(f.criadoEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
@@ -530,29 +643,106 @@ function AbaPedidos({ dados, fila, onTentar, recarregar }: { dados: Dados; fila:
           </ul>
         </section>
       )}
-      <h2 className="mb-2 text-sm font-semibold">Pedidos dos últimos 45 dias</h2>
-      {dados.pedidos.length === 0 ? <p className="py-8 text-center text-sm text-muted">Nenhum pedido ainda.</p> : (
+
+      <div className="relative mb-2">
+        <Search size={16} className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted" />
+        <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por número ou cliente" className="h-11 pl-8" aria-label="Buscar pedido" />
+      </div>
+      <div className="-mx-3 mb-2 flex gap-1.5 overflow-x-auto px-3 pb-1">
+        {FILTROS_PEDIDO.map(([k, r]) => (
+          <button key={k} onClick={() => setFiltro(k)}
+            className={cn("shrink-0 rounded-full border px-3 py-1 text-xs", filtro === k ? "border-accent bg-accent-soft text-accent" : "border-line bg-surface text-muted")}>{r}</button>
+        ))}
+      </div>
+      <div className="mb-2 flex justify-between text-xs text-muted">
+        <span>{lista.length} {lista.length === 1 ? "pedido" : "pedidos"} · últimos 90 dias</span>
+        <span className="tabular">{formatarMoeda(totalLista)}</span>
+      </div>
+      {lista.length === 0 ? <p className="py-8 text-center text-sm text-muted">Nenhum pedido encontrado.</p> : (
         <ul className="divide-y divide-line/70 rounded-lg border border-line bg-surface">
-          {dados.pedidos.map((p) => {
-            const st = STATUS_PEDIDO[p.status];
+          {lista.map((p) => {
+            const s = STATUS_PEDIDO[p.status];
             return (
-              <li key={p.id} className="px-3 py-2.5 text-sm">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">{p.cliente_fantasia || p.cliente_nome}</div>
-                    <div className="text-xs text-muted">Nº {p.numero} · {formatarData(p.data_emissao)}</div>
+              <li key={p.id}>
+                <button onClick={() => abrir(p)} className="w-full px-3 py-2.5 text-left text-sm hover:bg-surface-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">{p.cliente_fantasia || p.cliente_nome}</div>
+                      <div className="text-xs text-muted">Nº {p.numero} · {formatarData(p.data_emissao)}{p.forma_nome ? ` · ${p.forma_nome}` : ""}</div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="tabular">{formatarMoeda(p.valor_total)}</div>
+                      <div className="flex justify-end gap-1">
+                        {p.faturado_em && <Badge tom="acento">Faturado</Badge>}
+                        <Badge tom={s.tom}>{s.rotulo}</Badge>
+                      </div>
+                    </div>
                   </div>
-                  <div className="shrink-0 text-right">
-                    <div className="tabular">{formatarMoeda(p.valor_total)}</div>
-                    <Badge tom={st.tom}>{st.rotulo}</Badge>
-                  </div>
-                </div>
-                {p.motivo_trava && ["rascunho", "aguardando_credito"].includes(p.status) && <p className="mt-1 text-xs text-warn">{p.motivo_trava}</p>}
+                  {p.motivo_trava && ["rascunho", "aguardando_credito"].includes(p.status) && <p className="mt-1 text-xs text-warn">{p.motivo_trava}</p>}
+                </button>
               </li>
             );
           })}
         </ul>
       )}
+
+      <Dialogo aberto={!!aberto} titulo={aberto ? `Pedido nº ${aberto.numero}` : ""} descricao={aberto ? (aberto.cliente_fantasia || aberto.cliente_nome) : undefined}
+        aoFechar={() => setAberto(null)}
+        rodape={<>
+          <Button onClick={() => setAberto(null)}>Fechar</Button>
+          {detalhe?.pode_alterar && <Button variante="primario" onClick={() => { onAlterar(detalhe); setAberto(null); }}>Alterar pedido</Button>}
+        </>}>
+        {aberto && (
+          <div className="space-y-3 text-sm">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {st && <Badge tom={st.tom}>{st.rotulo}</Badge>}
+              {(detalhe?.faturado_em ?? aberto.faturado_em) && <Badge tom="acento">Faturado em {formatarData(detalhe?.faturado_em ?? aberto.faturado_em)}</Badge>}
+              <span className="text-xs text-muted">Emitido em {formatarData(aberto.data_emissao)}</span>
+            </div>
+            {!navigator.onLine && !detalhe && <p className="rounded bg-surface-2 p-2 text-xs text-muted">Sem sinal: abra com internet para ver os itens e alterar.</p>}
+            {carregando && <p className="text-xs text-muted">Carregando...</p>}
+            {detalhe && (
+              <>
+                <ul className="divide-y divide-line/70 rounded border border-line">
+                  {detalhe.itens.map((i) => (
+                    <li key={i.produto_id} className="flex items-start justify-between gap-2 px-2.5 py-1.5">
+                      <div className="min-w-0"><div className="leading-tight">{i.nome}</div><div className="tabular text-xs text-muted">{formatarNumero(i.quantidade)} × {formatarMoeda(i.preco)}</div></div>
+                      <span className="tabular shrink-0">{formatarMoeda(i.total)}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex justify-between font-semibold"><span>Total</span><span className="tabular">{formatarMoeda(detalhe.valor_total)}</span></div>
+                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+                  <dt className="text-muted">Pagamento</dt><dd>{[detalhe.condicao_nome, detalhe.forma_nome].filter(Boolean).join(" · ") || "—"}</dd>
+                  {detalhe.data_entrega && <><dt className="text-muted">Entrega</dt><dd>{formatarData(detalhe.data_entrega)}</dd></>}
+                  {detalhe.observacao && <><dt className="text-muted">Observação</dt><dd>{detalhe.observacao}</dd></>}
+                </dl>
+                {detalhe.motivo_trava && ["rascunho", "aguardando_credito"].includes(detalhe.status) && <p className="rounded bg-warn/10 p-2 text-xs text-warn">{detalhe.motivo_trava}</p>}
+                {detalhe.titulos.length > 0 && (
+                  <div>
+                    <div className="mb-1 text-xs font-medium text-muted">Parcelas</div>
+                    <ul className="space-y-0.5 text-xs">
+                      {detalhe.titulos.map((x) => (
+                        <li key={x.parcela} className="flex justify-between">
+                          <span>{x.parcela}/{x.total_parcelas} · vence {formatarData(x.vencimento)}</span>
+                          <span className="tabular">{formatarMoeda(x.valor)}{x.quitado ? " · pago" : ""}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {!detalhe.pode_alterar && (
+                  <p className="text-xs text-muted">
+                    {detalhe.faturado_em ? "Pedido faturado: não pode mais ser alterado pelo app. Fale com o escritório."
+                      : ["cancelado", "devolvido", "entregue", "em_rota"].includes(detalhe.status) ? "Este pedido já foi encerrado ou saiu para entrega."
+                      : "O pedido já está em separação. Peça à expedição para tirá-lo da carga se precisar alterar."}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </Dialogo>
     </>
   );
 }

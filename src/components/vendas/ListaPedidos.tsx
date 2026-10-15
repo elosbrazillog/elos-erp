@@ -15,7 +15,7 @@ const POR_PAGINA = 50;
 type Linha = {
   id: string; numero: number; tipo: "pedido" | "orcamento"; status: StatusPedido; data_emissao: string; data_entrega: string | null;
   cliente_codigo: number | null; cliente_nome: string; cliente_fantasia: string | null; vendedor_nome: string | null; rota_nome: string | null;
-  qtd_itens: number; valor_total: number; peso_total_kg: number; motivo_trava: string | null;
+  qtd_itens: number; valor_total: number; peso_total_kg: number; motivo_trava: string | null; faturado_em: string | null;
 };
 
 const FILTROS: { rotulo: string; status: StatusPedido[] | null }[] = [
@@ -172,7 +172,7 @@ export function ListaPedidos({ podeCriar }: { podeCriar: boolean }) {
                     <td className="hidden px-3 py-2 lg:table-cell">{l.rota_nome ?? <span className="text-muted/50">—</span>}</td>
                     <td className="hidden px-3 py-2 whitespace-nowrap lg:table-cell">{l.data_entrega ? formatarData(l.data_entrega) : <span className="text-muted/50">—</span>}</td>
                     <td className="tabular px-3 py-2 text-right whitespace-nowrap">{formatarMoeda(l.valor_total)}</td>
-                    <td className="px-3 py-2 whitespace-nowrap" title={l.motivo_trava ?? undefined}><Badge tom={st.tom}>{st.rotulo}</Badge></td>
+                    <td className="px-3 py-2 whitespace-nowrap" title={l.motivo_trava ?? undefined}><Badge tom={st.tom}>{st.rotulo}</Badge>{l.faturado_em && <span className="ml-1"><Badge tom="acento">Faturado</Badge></span>}</td>
                   </tr>
                 );
               })}
