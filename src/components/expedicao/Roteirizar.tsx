@@ -100,7 +100,7 @@ export function Roteirizar({ cargaId, aberto, aoFechar, aoAplicar }: { cargaId: 
   const nome = (id: string) => { const p = paradas?.find((x) => x.pedido_id === id); return p ? p.cliente_fantasia || p.cliente_nome : ""; };
   const pontosMapa: PontoMapa[] = [
     ...(origem ? [{ lat: origem.lat, lng: origem.lng, cor: "#1f2937", titulo: origemPadrao ? "Saída (centro de Campo Grande)" : "Saída (depósito)", rotulo: "S" }] : []),
-    ...nova.map((p, i) => ({ lat: p.lat, lng: p.lng, cor: "#0b6e8a", titulo: `${i + 1}. ${nome(p.id)}`, rotulo: i + 1 })),
+    ...nova.map((p, i) => ({ lat: p.lat, lng: p.lng, cor: "#d81f26", titulo: `${i + 1}. ${nome(p.id)}`, rotulo: i + 1 })),
   ];
 
   return (
@@ -124,7 +124,7 @@ export function Roteirizar({ cargaId, aberto, aoFechar, aoAplicar }: { cargaId: 
           )}
           {pontos.length > 0 && (
             <>
-              <Mapa pontos={pontosMapa} trilhas={origem ? [{ pontos: [[origem.lat, origem.lng], ...nova.map((p) => [p.lat, p.lng] as [number, number])], cor: "#0b6e8a" }] : []} altura={320} tracejada />
+              <Mapa pontos={pontosMapa} trilhas={origem ? [{ pontos: [[origem.lat, origem.lng], ...nova.map((p) => [p.lat, p.lng] as [number, number])], cor: "#d81f26" }] : []} altura={320} tracejada />
               <div className="grid grid-cols-2 gap-2 text-center">
                 <div className="rounded border border-line p-2"><div className="text-xs text-muted">Ordem atual</div><div className="tabular font-semibold">{formatarNumero(Math.round(kmAtual * 10) / 10)} km</div></div>
                 <div className="rounded border border-accent/40 bg-accent-soft/40 p-2"><div className="text-xs text-muted">Roteirizada</div><div className="tabular font-semibold">{formatarNumero(Math.round(kmNovo * 10) / 10)} km</div></div>

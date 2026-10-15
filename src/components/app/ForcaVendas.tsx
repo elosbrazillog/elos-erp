@@ -801,7 +801,7 @@ function GraficoDiario({ dias, porDia, hoje }: { dias: Diario[]; porDia: number 
               <rect x={x} y={0} width={bw + gap} height={H + 14} fill="transparent" />
               {!futuro && !d.util && v === 0 ? null : (
                 <rect x={x} y={H - h} width={bw} height={h} rx={Math.min(2, bw / 2)}
-                  fill="var(--accent)" opacity={destaque ? 1 : 0.45} />
+                  fill={destaque ? "var(--accent)" : "var(--chart)"} opacity={destaque ? 1 : 0.35} />
               )}
               {futuro && d.util && <rect x={x} y={H - 1.5} width={bw} height={1.5} fill="var(--line)" />}
               {(i === 0 || Number(d.dia.slice(8)) % 5 === 0) && (
@@ -918,7 +918,7 @@ function AbaInicio({ dados, onNovoPedido }: { dados: Dados; onNovoPedido: () => 
                   {m ? (
                     <>
                       <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
-                        <div className={cn("h-full rounded-full", x >= m ? "bg-ok" : "bg-accent")} style={{ width: `${Math.min(100, (x / m) * 100)}%` }} />
+                        <div className={cn("h-full rounded-full", x >= m ? "bg-ok" : "bg-chart")} style={{ width: `${Math.min(100, (x / m) * 100)}%` }} />
                       </div>
                       <div className="mt-0.5 text-xs text-muted">{Math.round((x / m) * 100)}% de {formatarMoeda(m)} · {v.pedidos} pedidos</div>
                     </>

@@ -26,7 +26,7 @@ type Entrega = {
   etapa: string | null; a_caminho_em: string | null; chegou_em: string | null;
 };
 
-const COR = { caminhao: "#0b6e8a", entregue: "#1d7f4e", problema: "#c0352b", pendente: "#8a97a6", a_caminho: "#0b6e8a", chegou: "#b26a00" };
+const COR = { caminhao: "#141414", entregue: "#128a3c", problema: "#a3141a", pendente: "#8a8a8f", a_caminho: "#d81f26", chegou: "#a86f00" };
 const hora = (v: string | null) => (v ? new Date(v).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "");
 function haQuanto(v: string | null) {
   if (!v) return null;

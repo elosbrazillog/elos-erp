@@ -151,7 +151,7 @@ function BarraMeta({ pct, ritmo }: { pct: number | null; ritmo: number | null })
   return (
     <div className="flex items-center gap-2">
       <div className="relative h-1.5 flex-1 rounded-full bg-surface-2">
-        <div className={cn("h-full rounded-full", pct >= 100 ? "bg-ok" : "bg-accent")} style={{ width: `${Math.min(100, Math.max(pct > 0 ? 2 : 0, pct))}%` }} />
+        <div className={cn("h-full rounded-full", pct >= 100 ? "bg-ok" : "bg-chart")} style={{ width: `${Math.min(100, Math.max(pct > 0 ? 2 : 0, pct))}%` }} />
         {ritmo !== null && ritmo < 1 && <div className="absolute -top-0.5 h-2.5 w-px bg-muted" style={{ left: `${ritmo * 100}%` }} title="Onde deveria estar hoje" />}
       </div>
       <span className={cn("tabular w-12 text-right text-xs", atrasado ? "text-warn" : "text-ink")}>{formatarNumero(Math.round(pct * 10) / 10)}%</span>
@@ -214,7 +214,7 @@ function Diario({ d }: { d: DadosPainel }) {
           return (
             <g key={x.dia} onPointerEnter={() => setAtivo(x.dia)}>
               <rect x={px - gap / 2} y={0} width={bw + gap} height={H + 14} fill="transparent" />
-              {h > 0 && <rect x={px} y={H - h} width={bw} height={h} rx={Math.min(2, bw / 2)} fill="var(--accent)" opacity={destaque ? 1 : 0.4} />}
+              {h > 0 && <rect x={px} y={H - h} width={bw} height={h} rx={Math.min(2, bw / 2)} fill={destaque ? "var(--accent)" : "var(--chart)"} opacity={destaque ? 1 : 0.35} />}
               {x.dia > hoje && <rect x={px} y={H - 1} width={bw} height={1} fill="var(--line)" />}
               {(i === 0 || Number(x.dia.slice(8, 10)) % 5 === 0) && (
                 <text x={px + bw / 2} y={H + 11} textAnchor="middle" fontSize="8" fill="var(--muted)">{Number(x.dia.slice(8, 10))}</text>
@@ -253,7 +253,7 @@ function Meses({ meses }: { meses: { mes: string; valor: number; meta: number | 
           return (
             <g key={m.mes} onPointerEnter={() => setAtivo(i)}>
               <rect x={px - gap / 2} y={0} width={bw + gap} height={H + 14} fill="transparent" />
-              {h > 0 && <rect x={px} y={H - h} width={bw} height={h} rx="3" fill="var(--accent)" opacity={i === i0 ? 1 : 0.4} />}
+              {h > 0 && <rect x={px} y={H - h} width={bw} height={h} rx="3" fill={i === i0 ? "var(--accent)" : "var(--chart)"} opacity={i === i0 ? 1 : 0.35} />}
               {ym !== null && <line x1={px - 2} x2={px + bw + 2} y1={ym} y2={ym} stroke="var(--muted)" strokeWidth="1.5" strokeDasharray="3 2" />}
               <text x={px + bw / 2} y={H + 11} textAnchor="middle" fontSize="8" fill="var(--muted)">{nomeMes(m.mes)}</text>
             </g>
@@ -290,16 +290,16 @@ function Semanas({ semanas }: { semanas: { inicio: string; receber: number; paga
           return (
             <g key={s.inicio} onPointerEnter={() => setAtivo(i)}>
               <rect x={i * grupo} y={0} width={grupo} height={H + 14} fill="transparent" />
-              {hr > 0 && <rect x={cx - bw - 1} y={H - hr} width={bw} height={hr} rx="3" fill="var(--accent)" opacity={op} />}
-              {hp > 0 && <rect x={cx + 1} y={H - hp} width={bw} height={hp} rx="3" fill="var(--muted)" opacity={op * 0.75} />}
+              {hr > 0 && <rect x={cx - bw - 1} y={H - hr} width={bw} height={hr} rx="3" fill="var(--chart)" opacity={op} />}
+              {hp > 0 && <rect x={cx + 1} y={H - hp} width={bw} height={hp} rx="3" fill="var(--accent)" opacity={op} />}
               <text x={cx} y={H + 11} textAnchor="middle" fontSize="8" fill="var(--muted)">{i === 0 ? "esta" : diaMes(s.inicio)}</text>
             </g>
           );
         })}
       </svg>
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
-        <span className="flex items-center gap-1"><span className="size-2 rounded-sm bg-accent" />a receber <b className="tabular font-normal text-ink">{formatarMoeda(n(sel.receber))}</b></span>
-        <span className="flex items-center gap-1"><span className="size-2 rounded-sm bg-muted/75" />a pagar <b className="tabular font-normal text-ink">{formatarMoeda(n(sel.pagar))}</b></span>
+        <span className="flex items-center gap-1"><span className="size-2 rounded-sm bg-chart" />a receber <b className="tabular font-normal text-ink">{formatarMoeda(n(sel.receber))}</b></span>
+        <span className="flex items-center gap-1"><span className="size-2 rounded-sm bg-accent" />a pagar <b className="tabular font-normal text-ink">{formatarMoeda(n(sel.pagar))}</b></span>
       </div>
     </div>
   );
@@ -317,7 +317,7 @@ function PorVendedor({ vendedores }: { vendedores: Vendedor[] }) {
             <li key={v.nome} className="grid grid-cols-[minmax(0,9rem)_1fr_auto] items-center gap-3 text-sm">
               <span className="truncate">{v.nome}</span>
               <div className="h-2 rounded-full bg-surface-2">
-                <div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(2, (n(v.faturado_mes) / max) * 100)}%` }} />
+                <div className="h-full rounded-full bg-chart" style={{ width: `${Math.max(2, (n(v.faturado_mes) / max) * 100)}%` }} />
               </div>
               <span className="tabular text-right">{formatarMoeda(n(v.faturado_mes))} <span className="text-xs text-muted">· {v.pedidos_mes}</span></span>
             </li>

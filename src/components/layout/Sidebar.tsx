@@ -22,9 +22,10 @@ export function Sidebar({ grupos, nome, perfil, empresa }: { grupos: GrupoMenu[]
 
   const conteudo = (
     <nav className="flex h-full flex-col bg-side text-side-ink">
-      <div className="flex h-14 items-center justify-between px-4">
-        <Link href="/" className="text-[15px] font-semibold tracking-wide text-white" onClick={() => setAberto(false)}>
-          ELOS <span className="font-normal text-side-ink">ERP</span>
+      <div className="flex h-16 items-center justify-between px-4">
+        <Link href="/" className="block" onClick={() => setAberto(false)} aria-label="Elos ERP · início">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-elos-curto.png" alt="Elos" className="h-8 w-auto" />
         </Link>
         <button className="lg:hidden" onClick={() => setAberto(false)} aria-label="Fechar menu">
           <X size={20} />
@@ -34,7 +35,7 @@ export function Sidebar({ grupos, nome, perfil, empresa }: { grupos: GrupoMenu[]
         <Link
           href="/"
           onClick={() => setAberto(false)}
-          className={cn("mb-1 flex items-center gap-2.5 rounded-md px-3 py-2", pathname === "/" ? "bg-side-active text-white" : "hover:bg-side-active/60")}
+          className={cn("mb-1 flex items-center gap-2.5 rounded-md px-3 py-2", pathname === "/" ? "bg-side-active text-white shadow-[inset_3px_0_0_var(--accent)]" : "hover:bg-side-active/60")}
         >
           <LayoutDashboard size={17} /> Painel
         </Link>
@@ -62,7 +63,7 @@ export function Sidebar({ grupos, nome, perfil, empresa }: { grupos: GrupoMenu[]
                         onClick={() => setAberto(false)}
                         className={cn(
                           "block rounded px-2.5 py-1.5 text-[13px]",
-                          pathname.startsWith(i.rota) ? "bg-side-active text-white" : "hover:text-white",
+                          pathname.startsWith(i.rota) ? "bg-side-active text-white shadow-[inset_3px_0_0_var(--accent)]" : "hover:text-white",
                         )}
                       >
                         {i.titulo}
@@ -98,7 +99,8 @@ export function Sidebar({ grupos, nome, perfil, empresa }: { grupos: GrupoMenu[]
         <button onClick={() => setAberto(true)} aria-label="Abrir menu">
           <Menu size={22} />
         </button>
-        <span className="font-semibold">ELOS ERP</span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo-elos-curto.png" alt="Elos" className="h-6 w-auto rounded-sm bg-black px-1.5 py-0.5" />
       </div>
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 lg:block">{conteudo}</aside>
       {aberto && (

@@ -51,11 +51,13 @@ function FormLogin() {
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-full items-center justify-center bg-side px-4 py-10">
-      <div className="w-full max-w-sm rounded-xl bg-surface p-7 shadow-xl">
+    <div className="flex min-h-full flex-col items-center justify-center bg-side px-4 py-10">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/logo-elos.png" alt="Elos · Distribuidora e comércio de alimentos" className="mb-8 w-full max-w-xs" />
+      <div className="w-full max-w-sm rounded-xl border-t-4 border-accent bg-surface p-7 shadow-xl">
         <div className="mb-6">
-          <div className="text-lg font-semibold">ELOS ERP</div>
-          <p className="text-sm text-muted">Entre com seu e-mail e senha</p>
+          <div className="text-lg font-semibold">Entrar no ERP</div>
+          <p className="text-sm text-muted">Use seu e-mail e senha</p>
         </div>
         <Suspense>
           <FormLogin />

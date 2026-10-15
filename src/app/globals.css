@@ -1,22 +1,23 @@
 @import "tailwindcss";
 
-/* Tema "câmara fria": neutros levemente azulados, acento azul-petróleo */
+/* Tema Elos: preto e branco da marca, vermelho de destaque, verde e amarelo da bandeira nos estados */
 :root {
-  --bg: #f4f6f8;
+  --bg: #f5f5f4;
   --surface: #ffffff;
-  --surface-2: #eef2f5;
-  --ink: #142231;
-  --muted: #5b6b7c;
-  --line: #d9e0e7;
-  --accent: #0b6e8a;
+  --surface-2: #efefee;
+  --ink: #141414;
+  --muted: #5f5f63;
+  --line: #e0e0de;
+  --accent: #d81f26;        /* vermelho da logo, um tom abaixo para dar contraste com o branco */
   --accent-ink: #ffffff;
-  --accent-soft: #e2f1f5;
-  --ok: #1d7f4e;
-  --warn: #b26b00;
-  --bad: #c0352b;
-  --side: #0f2233;
-  --side-ink: #c9d6e2;
-  --side-active: #1b3a52;
+  --accent-soft: #fdecec;
+  --chart: #262628;         /* barras dos gráficos: grafite, o vermelho fica para o destaque */
+  --ok: #128a3c;            /* verde da bandeira */
+  --warn: #a86f00;          /* amarelo da bandeira, escurecido para leitura */
+  --bad: #a3141a;
+  --side: #000000;
+  --side-ink: #cfcfd2;
+  --side-active: #1e1e20;
 }
 
 @theme inline {
@@ -29,6 +30,7 @@
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
   --color-accent-soft: var(--accent-soft);
+  --color-chart: var(--chart);
   --color-ok: var(--ok);
   --color-warn: var(--warn);
   --color-bad: var(--bad);
