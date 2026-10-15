@@ -47,6 +47,20 @@ export function AcertoMotorista({ id, podeEditar, podeBaixar }: { id: string; po
     setEntregue((v) => v || Number(x.recebido_dinheiro).toFixed(2).replace(".", ","));
   }, [supabase, id]);
   useEffect(() => { carregar(); }, [carregar]);
+  // despesas lançadas na expedição e pagas com o dinheiro da rota entram no acerto
+  useEffect(() => {
+    supabase.from("vw_despesas_frota").select("categoria, descricao, valor, litros, km_atual").eq("expedicao_id", id).eq("pago_pelo_motorista", true)
+      .then(({ data }) => {
+        const ds = (data ?? []) as { categoria: string; descricao: string | null; valor: number; litros: number | null; km_atual: number | null }[];
+        if (!ds.length) return;
+        const nomes: Record<string, string> = { combustivel: "Combustível", manutencao: "Manutenção", pneu: "Pneu", pedagio: "Pedágio", alimentacao: "Alimentação",
+          estacionamento: "Estacionamento", lavagem: "Lavagem", multa: "Multa", outros: "Outros" };
+        setDespesas((atual) => atual.length ? atual : ds.map((d) => ({
+          descricao: [nomes[d.categoria] ?? d.categoria, d.categoria === "combustivel" && d.litros ? `${String(d.litros).replace(".", ",")} L, km ${d.km_atual}` : d.descricao].filter(Boolean).join(" · "),
+          texto: Number(d.valor).toFixed(2).replace(".", ","),
+        })));
+      });
+  }, [supabase, id]);
   useEffect(() => {
     if (!podeBaixar) return;
     supabase.from("contas_bancarias").select("id, nome, emite_boleto").eq("ativo", true).order("nome").then(({ data }) => {
@@ -181,7 +195,7 @@ export function AcertoMotorista({ id, podeEditar, podeBaixar }: { id: string; po
                 <Input id="ac-entregue" inputMode="decimal" className="tabular h-11 text-right text-base" value={entregue} onChange={(e) => setEntregue(e.target.value)} />
               </div>
               <div>
-                <div className="mb-1 flex items-center justify-between"><Label>Despesas pagas com o dinheiro</Label>
+                <div className="mb-1 flex items-center justify-between"><Label>Despesas pagas com o dinheiro <span className="font-normal text-muted">(as lançadas em Despesas da frota já vêm aqui)</span></Label>
                   <Button tamanho="p" variante="fantasma" onClick={() => setDespesas((d) => [...d, { descricao: "", texto: "" }])}><Plus size={14} /> Despesa</Button></div>
                 {despesas.map((d, i) => (
                   <div key={i} className="mb-1.5 grid grid-cols-[1fr_6.5rem_auto] gap-1.5">

@@ -53,6 +53,7 @@ export const MENU: GrupoMenu[] = [
       { titulo: "Cargas", rota: "/expedicao/cargas", pronto: true },
       { titulo: "Acompanhamento", rota: "/expedicao/acompanhamento", pronto: true },
       { titulo: "Entregas", rota: "/expedicao/entregas", pronto: true },
+      { titulo: "Despesas da frota", rota: "/expedicao/despesas", pronto: true },
     ],
   },
   {
