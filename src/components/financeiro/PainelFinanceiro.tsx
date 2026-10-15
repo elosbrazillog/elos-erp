@@ -10,6 +10,7 @@ import { cn, dataLocal, formatarData, formatarMoeda, formatarNumero } from "@/li
 import { mensagemErro } from "@/lib/pedidos";
 import { DialogoNovo, useOpcoesFinanceiro } from "@/components/financeiro/Dialogos";
 import { CaixaBancos } from "@/components/financeiro/CaixaBancos";
+import { CobrancaSicredi } from "@/components/financeiro/CobrancaSicredi";
 
 const ABAS = ["Visão geral", "DRE simples", "Fluxo de caixa", "Caixa e bancos", "Plano de contas", "Centros de custo", "Boletos Sicredi"] as const;
 type Aba = (typeof ABAS)[number];
@@ -54,7 +55,7 @@ export function PainelFinanceiro({ podeEditar, podeCriar }: { podeEditar: boolea
       {aba === "Caixa e bancos" && <CaixaBancos />}
       {aba === "Plano de contas" && <PlanoContas podeEditar={podeEditar} podeCriar={podeCriar} />}
       {aba === "Centros de custo" && <Centros key={`c${versao}`} podeEditar={podeEditar} podeCriar={podeCriar} de={periodo.de} ate={periodo.ate} />}
-      {aba === "Boletos Sicredi" && <Boletos de={periodo.de} ate={periodo.ate} />}
+      {aba === "Boletos Sicredi" && <CobrancaSicredi de={periodo.de} ate={periodo.ate} />}
 
       <DialogoNovo tipo={novo ?? "pagar"} aberto={!!novo} aoFechar={() => setNovo(null)} aoConcluir={() => { setNovo(null); setVersao((v) => v + 1); }} />
     </>
@@ -544,50 +545,3 @@ function Centros({ podeEditar, podeCriar, de, ate }: { podeEditar: boolean; pode
 }
 
 // ---------------------------------------------------------------------
-type Boleto = { id: string; status: string; pedido_numero: number | null; pagador_nome: string | null; valor: number; data_vencimento: string; parcela: number; total_parcelas: number; data_quitacao: string | null; erro: string | null; pedido_id: string | null };
-const ST_BOLETO: Record<string, { r: string; t: "neutro" | "ok" | "aviso" | "erro" | "acento" }> = {
-  pendente: { r: "A registrar", t: "aviso" }, registrado: { r: "Registrado", t: "acento" }, pago: { r: "Pago", t: "ok" }, baixado: { r: "Baixado", t: "neutro" },
-  vencido: { r: "Vencido", t: "erro" }, erro: { r: "Erro", t: "erro" }, cancelado: { r: "Cancelado", t: "neutro" },
-};
-function Boletos({ de, ate }: { de: string; ate: string }) {
-  const supabase = useMemo(() => criarClienteNavegador(), []);
-  const [lista, setLista] = useState<Boleto[] | null>(null);
-  useEffect(() => {
-    supabase.from("vw_boletos").select("id, status, pedido_numero, pagador_nome, valor, data_vencimento, parcela, total_parcelas, data_quitacao, erro, pedido_id")
-      .gte("data_vencimento", de).lte("data_vencimento", ate).neq("status", "cancelado").order("data_vencimento").limit(1000)
-      .then(({ data, error }) => { if (error) toast.error("Não foi possível carregar", { description: mensagemErro(error) }); setLista((data ?? []) as Boleto[]); });
-  }, [supabase, de, ate]);
-  if (!lista) return <div className="py-10 text-center text-sm text-muted">Carregando...</div>;
-  const ids = [...new Set(lista.filter((b) => b.pedido_id).map((b) => b.pedido_id!))];
-  return (
-    <>
-      <Card className="mb-3 border-warn/40 bg-warn/5 p-3 text-sm">
-        Os boletos são gerados no faturamento e ficam <b>a registrar</b> até a ligação com a API de Cobrança do Sicredi. Sem o registro, o banco recusa o pagamento.
-      </Card>
-      <Card>
-        {lista.length === 0 ? <Vazio titulo="Nenhum boleto com vencimento no período" /> : (
-          <table className="w-full text-sm">
-            <thead className="border-b border-line text-left text-xs text-muted uppercase">
-              <tr><th className="px-3 py-2 font-medium">Vencimento</th><th className="px-3 py-2 font-medium">Pagador</th><th className="px-3 py-2 font-medium">Pedido</th><th className="px-3 py-2 text-right font-medium">Valor</th><th className="px-3 py-2 font-medium">Situação</th></tr>
-            </thead>
-            <tbody className="divide-y divide-line/70">
-              {lista.map((b) => {
-                const st = b.data_quitacao ? ST_BOLETO.pago : ST_BOLETO[b.status] ?? { r: b.status, t: "neutro" as const };
-                return (
-                  <tr key={b.id}>
-                    <td className="px-3 py-2">{formatarData(b.data_vencimento)}</td>
-                    <td className="px-3 py-2">{b.pagador_nome}</td>
-                    <td className="px-3 py-2 text-xs">{b.pedido_numero ?? "—"}{b.total_parcelas > 1 ? ` · ${b.parcela}/${b.total_parcelas}` : ""}</td>
-                    <td className="tabular px-3 py-2 text-right">{formatarMoeda(b.valor)}</td>
-                    <td className="px-3 py-2"><Badge tom={st.t}>{st.r}</Badge>{b.erro && <div className="text-xs text-bad">{b.erro}</div>}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </Card>
-      {ids.length > 0 && <a href={`/imprimir/boletos?pedidos=${ids.slice(0, 150).join(",")}`} target="_blank" rel="noreferrer"><Button className="mt-3">Imprimir boletos registrados</Button></a>}
-    </>
-  );
-}

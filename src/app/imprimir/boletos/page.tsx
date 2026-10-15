@@ -9,7 +9,7 @@ export const metadata = { title: "Boletos" };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ pedidos?: string; exemplo?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<{ pedidos?: string; exemplo?: string; remessa?: string; boletos?: string }> }) {
   const sp = await searchParams;
   const sessao = await obterSessao();
   if (!sessao || !(pode(sessao, "financeiro") || pode(sessao, "fiscal") || pode(sessao, "vendas"))) redirect("/sem-acesso");
@@ -30,12 +30,16 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   }
 
   const ids = (sp.pedidos ?? "").split(",").filter((x) => UUID.test(x)).slice(0, 150);
-  const { data } = ids.length
-    ? await supabase.from("vw_boletos").select("*").in("pedido_id", ids).neq("status", "cancelado").order("pedido_numero").order("parcela")
+  const idsBoletos = (sp.boletos ?? "").split(",").filter((x) => UUID.test(x)).slice(0, 300);
+  const remessa = sp.remessa && UUID.test(sp.remessa) ? sp.remessa : null;
+  const base = () => supabase.from("vw_boletos").select("*").neq("status", "cancelado");
+  const { data } = remessa ? await base().eq("remessa_id", remessa).order("pagador_nome").order("parcela")
+    : idsBoletos.length ? await base().in("id", idsBoletos).order("pagador_nome").order("parcela")
+    : ids.length ? await base().in("pedido_id", ids).order("pedido_numero").order("parcela")
     : { data: [] };
   const todos = (data ?? []) as Boleto[];
   const abertos = todos.filter((b) => !b.data_quitacao);
-  const prontos = abertos.filter((b) => b.status === "registrado" && b.linha_digitavel && b.codigo_barras);
+  const prontos = abertos.filter((b) => ["enviado", "registrado"].includes(b.status) && b.linha_digitavel && b.codigo_barras);
   const pendentes = abertos.filter((b) => !prontos.includes(b));
   const pagos = todos.length - abertos.length;
 
@@ -52,8 +56,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
         </div>
         {pendentes.length > 0 && (
           <div className="rounded border border-amber-500 bg-amber-50 p-3 text-sm">
-            <b>{pendentes.length} {pendentes.length === 1 ? "boleto ainda não foi registrado" : "boletos ainda não foram registrados"} no Sicredi</b> e não {pendentes.length === 1 ? "é impresso" : "são impressos"}:
-            boleto sem registro é recusado pelo banco na hora do pagamento. O registro automático entra quando a API de Cobrança do Sicredi for liberada para a Elos.
+            <b>{pendentes.length} {pendentes.length === 1 ? "boleto ainda não foi enviado" : "boletos ainda não foram enviados"} ao Sicredi</b> e não {pendentes.length === 1 ? "é impresso" : "são impressos"}:
+            gere a remessa em Financeiro → Painel financeiro → Boletos Sicredi e envie o arquivo ao banco. Boleto sem registro é recusado na hora do pagamento.
             <ul className="mt-1.5 list-disc pl-5 text-xs">
               {pendentes.slice(0, 30).map((b) => (
                 <li key={b.id}>

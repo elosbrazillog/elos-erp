@@ -9,6 +9,7 @@ export type Boleto = {
   pagador_complemento: string | null; pagador_bairro: string | null; pagador_cidade: string | null; pagador_uf: string | null; pagador_cep: string | null;
   conta_nome: string | null; banco_codigo: string | null; agencia: string | null; posto: string | null; conta: string | null; sicredi_codigo_beneficiario: string | null;
   beneficiario_nome: string; beneficiario_cnpj: string; beneficiario_endereco: string | null; beneficiario_cidade: string | null; beneficiario_uf: string | null;
+  seu_numero?: string | null; boleto_multa?: number | null; boleto_juros_dia?: number | null;
 };
 
 
@@ -21,6 +22,8 @@ export const EXEMPLO: Boleto = {
   pagador_uf: "MS", pagador_cep: "79000000", conta_nome: "Sicredi", banco_codigo: "748", agencia: "0000", posto: "00", conta: null,
   sicredi_codigo_beneficiario: "00000", beneficiario_nome: "", beneficiario_cnpj: "", beneficiario_endereco: null, beneficiario_cidade: null, beneficiario_uf: null,
 };
+
+const formatarPct = (v: number | null | undefined) => `${Number(v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 3 })}%`;
 
 function CodigoBarras({ codigo }: { codigo: string }) {
   const barras = barrasItf(codigo);
@@ -70,7 +73,7 @@ export function FichaBoleto({ b, exemplo }: { b: Boleto; exemplo?: boolean }) {
         <Campo rotulo="Nosso número">{b.nosso_numero}</Campo>
         <Campo rotulo="Vencimento" direita>{formatarData(b.data_vencimento)}</Campo>
         <Campo rotulo="Pagador">{b.pagador_nome}</Campo>
-        <Campo rotulo="Nº documento">{b.documento}{b.total_parcelas > 1 ? `/${b.parcela}` : ""}</Campo>
+        <Campo rotulo="Nº documento">{b.seu_numero ?? <>{b.documento}{b.total_parcelas > 1 ? `/${b.parcela}` : ""}</>}</Campo>
         <Campo rotulo="Pedido">{b.pedido_numero}</Campo>
         <Campo rotulo="Valor do documento" direita>{formatarMoeda(b.valor)}</Campo>
       </div>
@@ -87,7 +90,7 @@ export function FichaBoleto({ b, exemplo }: { b: Boleto; exemplo?: boolean }) {
       </div>
       <div className="grid grid-cols-[1fr_1fr_0.6fr_0.4fr_1fr_1fr] border-r border-black">
         <Campo rotulo="Data do documento">{formatarData(b.data_competencia)}</Campo>
-        <Campo rotulo="Nº documento">{b.documento}{b.total_parcelas > 1 ? `/${b.parcela}` : ""}</Campo>
+        <Campo rotulo="Nº documento">{b.seu_numero ?? <>{b.documento}{b.total_parcelas > 1 ? `/${b.parcela}` : ""}</>}</Campo>
         <Campo rotulo="Espécie doc.">DMI</Campo>
         <Campo rotulo="Aceite">N</Campo>
         <Campo rotulo="Data processamento">{formatarData(b.data_competencia)}</Campo>
@@ -105,7 +108,11 @@ export function FichaBoleto({ b, exemplo }: { b: Boleto; exemplo?: boolean }) {
         <div className="border-b border-l border-black px-1 py-0.5 text-[9px]">
           <div className="text-[7px] uppercase">Instruções (texto de responsabilidade do beneficiário)</div>
           <div>Referente ao pedido nº {b.pedido_numero}{b.total_parcelas > 1 ? ` · parcela ${b.parcela} de ${b.total_parcelas}` : ""}.</div>
-          <div>Após o vencimento, sujeito a juros e multa conforme o cadastro do título no banco.</div>
+          <div>
+            {Number(b.boleto_multa) > 0 || Number(b.boleto_juros_dia) > 0
+              ? <>Após o vencimento cobrar{Number(b.boleto_multa) > 0 ? ` multa de ${formatarPct(b.boleto_multa)}` : ""}{Number(b.boleto_multa) > 0 && Number(b.boleto_juros_dia) > 0 ? " e" : ""}{Number(b.boleto_juros_dia) > 0 ? ` juros de ${formatarPct(b.boleto_juros_dia)} ao dia` : ""}.</>
+              : "Após o vencimento, sujeito a juros e multa conforme o cadastro do título no banco."}
+          </div>
         </div>
         <div className="grid">
           <Campo rotulo="(−) Desconto" direita>{" "}</Campo>

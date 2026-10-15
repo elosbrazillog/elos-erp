@@ -19,3 +19,4 @@ $P -d t -f tests/teste_despesas.sql
 $P -d t -f tests/teste_dre.sql
 $P -d t -f tests/teste_comissoes.sql
 $P -d t -f tests/teste_painel_inicio.sql
+$P -d t -f tests/teste_cnab.sql
