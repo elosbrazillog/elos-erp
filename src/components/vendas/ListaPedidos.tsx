@@ -3,20 +3,26 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Download, Plus, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, FileCheck2, Plus, Printer, Search } from "lucide-react";
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import { Badge, Button, Cabecalho, Card, Input, Select, Vazio } from "@/components/ui";
 import { cn, formatarData, formatarMoeda } from "@/lib/utils";
 import { STATUS_PEDIDO, mensagemErro, type StatusPedido } from "@/lib/pedidos";
 import { exportarExcel } from "@/components/crud/exportar";
+import { Dialogo } from "@/components/ui/Dialogo";
 
 const POR_PAGINA = 50;
 
 type Linha = {
   id: string; numero: number; tipo: "pedido" | "orcamento"; status: StatusPedido; data_emissao: string; data_entrega: string | null;
   cliente_codigo: number | null; cliente_nome: string; cliente_fantasia: string | null; vendedor_nome: string | null; rota_nome: string | null;
-  qtd_itens: number; valor_total: number; peso_total_kg: number; motivo_trava: string | null; faturado_em: string | null;
+  qtd_itens: number; valor_total: number; peso_total_kg: number; motivo_trava: string | null; faturado_em: string | null; gera_boleto: boolean;
 };
+type Selecionado = Pick<Linha, "id" | "numero" | "tipo" | "status" | "valor_total" | "faturado_em" | "gera_boleto">;
+type ResultadoFat = { faturados: number; boletos: number; erros: { pedido_id: string; numero: number; motivo: string }[]; ids: string[] };
+const FATURAVEL: StatusPedido[] = ["aprovado", "em_separacao", "em_rota", "entregue"];
+const LIMITE_LOTE = 150;
+const podeFaturarPedido = (l: Selecionado) => l.tipo === "pedido" && !l.faturado_em && FATURAVEL.includes(l.status);
 
 const FILTROS: { rotulo: string; status: StatusPedido[] | null }[] = [
   { rotulo: "Todos", status: null },
@@ -28,7 +34,7 @@ const FILTROS: { rotulo: string; status: StatusPedido[] | null }[] = [
   { rotulo: "Cancelados", status: ["cancelado", "devolvido"] },
 ];
 
-export function ListaPedidos({ podeCriar }: { podeCriar: boolean }) {
+export function ListaPedidos({ podeCriar, podeFaturar }: { podeCriar: boolean; podeFaturar: boolean }) {
   const router = useRouter();
   const supabase = useMemo(() => criarClienteNavegador(), []);
   const [linhas, setLinhas] = useState<Linha[]>([]);
@@ -43,6 +49,11 @@ export function ListaPedidos({ podeCriar }: { podeCriar: boolean }) {
   const [de, setDe] = useState("");
   const [ate, setAte] = useState("");
   const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [sel, setSel] = useState<Map<string, Selecionado>>(new Map());
+  const [confirmando, setConfirmando] = useState(false);
+  const [faturando, setFaturando] = useState(false);
+  const [resultado, setResultado] = useState<ResultadoFat | null>(null);
+  const [marcandoTodos, setMarcandoTodos] = useState(false);
 
   const consulta = useCallback(
     (cols: string, contagem: boolean) => {
@@ -83,6 +94,52 @@ export function ListaPedidos({ podeCriar }: { podeCriar: boolean }) {
     setBusca(v);
     if (temporizador.current) clearTimeout(temporizador.current);
     temporizador.current = setTimeout(() => { setPagina(0); setBuscaAplicada(v); }, 350);
+  }
+
+  const paginaMarcada = linhas.length > 0 && linhas.every((l) => sel.has(l.id));
+  function marcar(l: Linha) {
+    setSel((s) => { const n = new Map(s); if (n.has(l.id)) n.delete(l.id); else n.set(l.id, l); return n; });
+  }
+  function marcarPagina() {
+    setSel((s) => {
+      const n = new Map(s);
+      if (paginaMarcada) linhas.forEach((l) => n.delete(l.id));
+      else linhas.forEach((l) => n.set(l.id, l));
+      return n;
+    });
+  }
+  async function marcarTodosDoFiltro() {
+    setMarcandoTodos(true);
+    const { data, error } = await consulta("id, numero, tipo, status, valor_total, faturado_em, gera_boleto", false)
+      .order("numero", { ascending: false }).limit(1000);
+    setMarcandoTodos(false);
+    if (error) return toast.error("Não foi possível marcar", { description: mensagemErro(error) });
+    setSel(new Map(((data ?? []) as unknown as Selecionado[]).map((l) => [l.id, l])));
+  }
+
+  const selecionados = [...sel.values()];
+  const totalSel = selecionados.reduce((a, l) => a + Number(l.valor_total), 0);
+  const faturaveis = selecionados.filter(podeFaturarPedido);
+  const comBoleto = selecionados.filter((l) => l.faturado_em && l.gera_boleto);
+
+  function abrirLote(rota: string, ids: string[], param = "ids") {
+    if (!ids.length) return;
+    if (ids.length > LIMITE_LOTE) return toast.error(`Selecione até ${LIMITE_LOTE} pedidos por impressão`);
+    window.open(`${rota}?${param}=${ids.join(",")}`, "_blank", "noopener");
+  }
+
+  async function faturar() {
+    setFaturando(true);
+    const ids = faturaveis.map((l) => l.id);
+    const { data, error } = await supabase.rpc("pedido_faturar_lote", { p_pedidos: ids });
+    setFaturando(false);
+    setConfirmando(false);
+    if (error) return toast.error("Não foi possível faturar", { description: mensagemErro(error) });
+    const r = data as Omit<ResultadoFat, "ids">;
+    const comErro = new Set(r.erros.map((e) => e.pedido_id));
+    setResultado({ ...r, ids: ids.filter((i) => !comErro.has(i)) });
+    setSel(new Map());
+    carregar();
   }
 
   async function exportar() {
@@ -144,6 +201,7 @@ export function ListaPedidos({ podeCriar }: { podeCriar: boolean }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line bg-surface-2/60 text-left text-xs text-muted">
+                <th className="w-9 py-2 pl-3"><input type="checkbox" checked={paginaMarcada} onChange={marcarPagina} aria-label="Marcar os pedidos desta página" className="size-4 accent-[var(--accent)]" /></th>
                 <th className="px-3 py-2 font-medium">Nº</th>
                 <th className="px-3 py-2 font-medium">Emissão</th>
                 <th className="px-3 py-2 font-medium">Cliente</th>
@@ -158,7 +216,10 @@ export function ListaPedidos({ podeCriar }: { podeCriar: boolean }) {
               {linhas.map((l) => {
                 const st = STATUS_PEDIDO[l.status];
                 return (
-                  <tr key={l.id} onClick={() => router.push(`/vendas/pedidos/${l.id}`)} className="cursor-pointer border-b border-line/70 hover:bg-surface-2/70">
+                  <tr key={l.id} onClick={() => router.push(`/vendas/pedidos/${l.id}`)} className={cn("cursor-pointer border-b border-line/70 hover:bg-surface-2/70", sel.has(l.id) && "bg-accent-soft/50")}>
+                    <td className="py-2 pl-3" onClick={(e) => { e.stopPropagation(); marcar(l); }}>
+                      <input type="checkbox" checked={sel.has(l.id)} onChange={() => undefined} aria-label={`Marcar ${l.tipo === "orcamento" ? "orçamento" : "pedido"} ${l.numero}`} className="size-4 accent-[var(--accent)]" />
+                    </td>
                     <td className="tabular px-3 py-2 whitespace-nowrap">
                       {l.numero}
                       {l.tipo === "orcamento" && <span className="ml-1.5"><Badge tom="acento">Orçamento</Badge></span>}
@@ -186,6 +247,14 @@ export function ListaPedidos({ podeCriar }: { podeCriar: boolean }) {
           )}
           {carregando && linhas.length === 0 && <div className="px-4 py-10 text-center text-sm text-muted">Carregando...</div>}
         </div>
+        {paginaMarcada && total > linhas.length && sel.size < total && (
+          <div className="border-b border-line bg-accent-soft/40 px-3 py-2 text-center text-xs">
+            Os {linhas.length} desta página estão marcados.{" "}
+            <button className="font-medium text-accent underline disabled:opacity-50" disabled={marcandoTodos} onClick={marcarTodosDoFiltro}>
+              {marcandoTodos ? "Marcando..." : `Marcar todos os ${Math.min(total, 1000)} deste filtro`}
+            </button>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs text-muted">
           <span className="tabular">
@@ -199,6 +268,66 @@ export function ListaPedidos({ podeCriar }: { podeCriar: boolean }) {
           </div>
         </div>
       </Card>
+
+      {sel.size > 0 && (
+        <div className="sticky bottom-3 z-10 mt-3">
+          <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-2 rounded-lg bg-side px-4 py-2.5 text-white shadow-lg">
+            <div className="mr-auto text-sm">
+              <b className="tabular">{sel.size}</b> {sel.size === 1 ? "marcado" : "marcados"} · <span className="tabular font-semibold">{formatarMoeda(totalSel)}</span>
+            </div>
+            <Button onClick={() => setSel(new Map())}>Limpar</Button>
+            <Button onClick={() => abrirLote("/imprimir/pedidos", selecionados.map((l) => l.id))}><Printer size={16} /> Imprimir pedidos</Button>
+            {comBoleto.length > 0 && (
+              <Button onClick={() => abrirLote("/imprimir/boletos", comBoleto.map((l) => l.id), "pedidos")}><Printer size={16} /> Boletos ({comBoleto.length})</Button>
+            )}
+            {podeFaturar && (
+              <Button variante="primario" disabled={!faturaveis.length} title={!faturaveis.length ? "Nenhum marcado pode ser faturado (precisa ser pedido aprovado em diante e ainda não faturado)" : undefined}
+                onClick={() => setConfirmando(true)}>
+                <FileCheck2 size={16} /> Faturar{faturaveis.length ? ` (${faturaveis.length})` : ""}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <Dialogo aberto={confirmando} titulo={`Faturar ${faturaveis.length} ${faturaveis.length === 1 ? "pedido" : "pedidos"}`} aoFechar={() => setConfirmando(false)}
+        rodape={<><Button onClick={() => setConfirmando(false)}>Voltar</Button><Button variante="primario" disabled={faturando} onClick={faturar}>{faturando ? "Faturando..." : "Faturar"}</Button></>}>
+        <div className="space-y-2 text-sm">
+          <p>
+            Total de <b className="tabular">{formatarMoeda(faturaveis.reduce((a, l) => a + Number(l.valor_total), 0))}</b>.
+            {faturaveis.some((l) => l.gera_boleto) && <> {faturaveis.filter((l) => l.gera_boleto).length} com boleto.</>}
+          </p>
+          {faturaveis.length < sel.size && (
+            <p className="rounded bg-surface-2 p-2 text-xs text-muted">
+              {sel.size - faturaveis.length} dos marcados ficam de fora: orçamentos, rascunhos, aguardando crédito, cancelados ou já faturados.
+            </p>
+          )}
+          <ul className="list-disc space-y-1 pl-5 text-muted">
+            <li>As contas a receber são geradas agora, com vencimento contado a partir de hoje.</li>
+            <li>Pedido faturado não pode mais ser alterado pelo vendedor nem cancelado (só com estorno em Fiscal › Faturamento).</li>
+            <li>Os boletos ficam aguardando o registro no Sicredi para serem impressos.</li>
+          </ul>
+        </div>
+      </Dialogo>
+
+      <Dialogo aberto={!!resultado} titulo="Faturamento concluído" aoFechar={() => setResultado(null)}
+        rodape={<>
+          <Button onClick={() => setResultado(null)}>Fechar</Button>
+          {resultado && resultado.ids.length > 0 && <Button onClick={() => abrirLote("/imprimir/pedidos", resultado.ids)}><Printer size={16} /> Imprimir pedidos</Button>}
+          {resultado && resultado.boletos > 0 && <Button variante="primario" onClick={() => abrirLote("/imprimir/boletos", resultado.ids, "pedidos")}><Printer size={16} /> Imprimir boletos</Button>}
+        </>}>
+        {resultado && (
+          <div className="space-y-2 text-sm">
+            <p><b>{resultado.faturados}</b> {resultado.faturados === 1 ? "pedido faturado" : "pedidos faturados"}{resultado.boletos > 0 && <>, {resultado.boletos} {resultado.boletos === 1 ? "boleto gerado" : "boletos gerados"}</>}.</p>
+            {resultado.erros.length > 0 && (
+              <div className="rounded border border-bad/30 bg-bad/5 p-2">
+                <div className="mb-1 text-xs font-medium text-bad">{resultado.erros.length} não {resultado.erros.length === 1 ? "foi faturado" : "foram faturados"}</div>
+                <ul className="space-y-0.5 text-xs">{resultado.erros.map((e) => <li key={e.pedido_id}><b>Pedido {e.numero}:</b> {e.motivo}</li>)}</ul>
+              </div>
+            )}
+          </div>
+        )}
+      </Dialogo>
     </>
   );
 }
