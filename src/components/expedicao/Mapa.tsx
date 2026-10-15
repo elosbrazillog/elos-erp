@@ -29,6 +29,8 @@ export function Mapa({ pontos, trilhas, altura = 420, tracejada }: { pontos: Pon
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(mapa.current);
       camada.current = Lf.layerGroup().addTo(mapa.current);
+      const m = mapa.current;
+      new ResizeObserver(() => { m.invalidateSize(); ultimaAssinatura.current = ""; desenhar(); }).observe(div.current);
       desenhar();
     })();
     return () => { vivo = false; mapa.current?.remove(); mapa.current = null; };
@@ -58,6 +60,7 @@ export function Mapa({ pontos, trilhas, altura = 420, tracejada }: { pontos: Pon
     }
     if (assinatura !== ultimaAssinatura.current) {
       ultimaAssinatura.current = assinatura;
+      m.invalidateSize(); // o mapa pode ter nascido escondido (diálogo) com tamanho zero
       const todos: [number, number][] = [...pontos.map((p) => [p.lat, p.lng] as [number, number]), ...trilhas.flatMap((t) => t.pontos)];
       if (todos.length === 1) m.setView(todos[0], 14);
       else if (todos.length > 1) m.fitBounds(Lf.latLngBounds(todos), { padding: [30, 30], maxZoom: 15 });
