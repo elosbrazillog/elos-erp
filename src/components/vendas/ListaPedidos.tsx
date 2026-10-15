@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Download, FileCheck2, Plus, Printer, Search, Truck } from "lucide-react";
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import { Badge, Button, Cabecalho, Card, Input, Select, Vazio } from "@/components/ui";
-import { cn, formatarData, formatarMoeda } from "@/lib/utils";
+import { cn, formatarData, formatarMoeda, dataLocal } from "@/lib/utils";
 import { STATUS_PEDIDO, mensagemErro, type StatusPedido } from "@/lib/pedidos";
 import { exportarExcel } from "@/components/crud/exportar";
 import { Dialogo } from "@/components/ui/Dialogo";
@@ -59,7 +59,7 @@ export function ListaPedidos({ podeCriar, podeFaturar, podeMontarCarga }: { pode
   const [marcandoTodos, setMarcandoTodos] = useState(false);
   const [montando, setMontando] = useState(false);
   const [cargasAbertas, setCargasAbertas] = useState<CargaAberta[]>([]);
-  const [fc, setFc] = useState({ destino: "nova", carga_id: "", data: new Date().toISOString().slice(0, 10), rota_id: "", motorista_id: "", veiculo_id: "" });
+  const [fc, setFc] = useState({ destino: "nova", carga_id: "", data: dataLocal(), rota_id: "", motorista_id: "", veiculo_id: "" });
   const [salvandoCarga, setSalvandoCarga] = useState(false);
 
   const consulta = useCallback(

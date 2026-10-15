@@ -6,7 +6,7 @@ import { Button, Input, Label, Select, Textarea } from "@/components/ui";
 import { Dialogo } from "@/components/ui/Dialogo";
 import { BuscaRegistro, type Resultado } from "@/components/ui/BuscaRegistro";
 import { carregarOpcoesRelacao } from "@/components/crud/CampoInput";
-import { cn, formatarData, formatarNumero } from "@/lib/utils";
+import { cn, formatarData, formatarNumero, dataLocal } from "@/lib/utils";
 import { mensagemErro } from "@/lib/pedidos";
 import type { Opcao } from "@/lib/entidades";
 
@@ -23,7 +23,7 @@ export function useDepositos() {
   return { depositos, padrao };
 }
 
-const somarDias = (d: number) => new Date(Date.now() + d * 86400000).toISOString().slice(0, 10);
+const somarDias = (d: number) => dataLocal(d);
 const num = (v: string) => Number(String(v).replace(",", "."));
 
 /** Entrada de mercadoria com lote e validade */

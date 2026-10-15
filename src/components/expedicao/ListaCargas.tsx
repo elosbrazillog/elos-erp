@@ -7,7 +7,7 @@ import { criarClienteNavegador } from "@/lib/supabase/client";
 import { Badge, Button, Cabecalho, Card, Input, Label, Select, Textarea, Vazio } from "@/components/ui";
 import { Dialogo } from "@/components/ui/Dialogo";
 import { carregarOpcoesRelacao } from "@/components/crud/CampoInput";
-import { cn, formatarData, formatarMoeda, formatarNumero } from "@/lib/utils";
+import { cn, formatarData, formatarMoeda, formatarNumero, dataLocal } from "@/lib/utils";
 import { STATUS_CARGA, mensagemErro } from "@/lib/pedidos";
 import type { Opcao } from "@/lib/entidades";
 
@@ -44,7 +44,7 @@ export function ListaCargas({ podeCriar }: { podeCriar: boolean }) {
   const [cargas, setCargas] = useState<Carga[] | null>(null);
   const [filtro, setFiltro] = useState(0);
   const [nova, setNova] = useState(false);
-  const [f, setF] = useState({ data: new Date().toISOString().slice(0, 10), rota_id: "", motorista_id: "", veiculo_id: "", observacao: "" });
+  const [f, setF] = useState({ data: dataLocal(), rota_id: "", motorista_id: "", veiculo_id: "", observacao: "" });
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { ArrowLeftRight, Download, PackagePlus, Search } from "lucide-react";
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import { Abas, Badge, Button, Cabecalho, Card, Input, Select, Vazio } from "@/components/ui";
-import { cn, formatarData, formatarMoeda, formatarNumero } from "@/lib/utils";
+import { cn, formatarData, formatarMoeda, formatarNumero, dataLocal } from "@/lib/utils";
 import { mensagemErro, situacaoValidade } from "@/lib/pedidos";
 import { exportarExcel } from "@/components/crud/exportar";
 import { DialogoEntrada, DialogoMovimento, useDepositos, type SaldoLote } from "@/components/estoque/Dialogos";
@@ -16,7 +16,7 @@ type Produto = {
 type Lote = SaldoLote & { produto_id: string; dias_para_vencer: number | null; fabricacao: string | null; valor_custo: number };
 
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-const diasAte = (d: string | null) => (d ? Math.round((new Date(`${d}T12:00:00`).getTime() - new Date(new Date().toISOString().slice(0, 10) + "T12:00:00").getTime()) / 86400000) : null);
+const diasAte = (d: string | null) => (d ? Math.round((new Date(`${d}T12:00:00`).getTime() - new Date(dataLocal() + "T12:00:00").getTime()) / 86400000) : null);
 
 export function EstoqueSaldos({ podeMovimentar }: { podeMovimentar: boolean }) {
   const supabase = useMemo(() => criarClienteNavegador(), []);

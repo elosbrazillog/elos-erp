@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { dataLocal } from "@/lib/utils";
 import { CheckCircle2, Circle } from "lucide-react";
 import { criarClienteServidor } from "@/lib/supabase/server";
 import { obterSessao, pode } from "@/lib/sessao";
@@ -38,8 +39,8 @@ export default async function Painel() {
   const veVendas = pode(sessao, "vendas");
   const veEstoque = pode(sessao, "estoque");
   const veFinanceiro = pode(sessao, "financeiro");
-  const hoje = new Date().toISOString().slice(0, 10);
-  const em30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  const hoje = dataLocal();
+  const em30 = dataLocal(30);
   const conta = async (q: PromiseLike<{ count: number | null }>) => (await q).count ?? 0;
   const somaAtraso = async () => {
     if (!veFinanceiro) return 0;

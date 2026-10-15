@@ -6,7 +6,7 @@ import { FileCheck2, Printer, RefreshCw, Search, Undo2 } from "lucide-react";
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import { Badge, Button, Cabecalho, Card, Input, Label, Select, Textarea, Vazio } from "@/components/ui";
 import { Dialogo } from "@/components/ui/Dialogo";
-import { cn, formatarData, formatarMoeda } from "@/lib/utils";
+import { cn, formatarData, formatarMoeda, dataLocal } from "@/lib/utils";
 import { STATUS_PEDIDO, mensagemErro, type StatusPedido } from "@/lib/pedidos";
 
 type Linha = {
@@ -17,7 +17,7 @@ type Linha = {
 };
 type Resultado = { faturados: number; boletos: number; erros: { pedido_id: string; numero: number; motivo: string }[]; ids: string[] };
 
-const hojeMenos = (dias: number) => new Date(Date.now() - dias * 864e5).toISOString().slice(0, 10);
+const hojeMenos = (dias: number) => dataLocal(-dias);
 const LIMITE_IMPRESSAO = 150;
 
 export function Faturamento({ podeFaturar }: { podeFaturar: boolean }) {

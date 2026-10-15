@@ -1,4 +1,5 @@
 "use client";
+import { dataLocal } from "@/lib/utils";
 
 /** Gera e baixa uma planilha .xlsx no navegador */
 export async function exportarExcel(nome: string, cabecalho: string[], linhas: (string | number)[][]) {
@@ -18,7 +19,7 @@ export async function exportarExcel(nome: string, cabecalho: string[], linhas: (
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${nome} ${new Date().toISOString().slice(0, 10)}.xlsx`;
+  a.download = `${nome} ${dataLocal()}.xlsx`;
   a.click();
   URL.revokeObjectURL(url);
 }

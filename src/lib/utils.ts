@@ -63,3 +63,9 @@ export function documentoValido(v: string) {
 }
 
 export const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+/** Data (AAAA-MM-DD) no horário da empresa, deslocada em dias. Vale no navegador e no servidor (UTC). */
+export function dataLocal(dias = 0) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Campo_Grande", year: "numeric", month: "2-digit", day: "2-digit" })
+    .format(new Date(Date.now() + dias * 86400000));
+}

@@ -9,7 +9,7 @@ import { Badge, Button, Cabecalho, Card, Input, Label, Select, Textarea, Vazio }
 import { Dialogo } from "@/components/ui/Dialogo";
 import { BuscaRegistro, type Resultado } from "@/components/ui/BuscaRegistro";
 import { carregarOpcoesRelacao } from "@/components/crud/CampoInput";
-import { cn, formatarData, formatarDocumento, formatarMoeda, formatarNumero } from "@/lib/utils";
+import { cn, formatarData, formatarDocumento, formatarMoeda, formatarNumero, dataLocal } from "@/lib/utils";
 import { buscarClientes, carregarProdutosVenda, filtrarProdutos, type ProdutoVenda } from "@/lib/buscas";
 import { STATUS_PEDIDO, mensagemErro, type StatusPedido } from "@/lib/pedidos";
 import type { Opcao } from "@/lib/entidades";
@@ -35,8 +35,8 @@ const CAMPOS_COMERCIAIS = ["vendedor_id", "tabela_preco_id", "condicao_pagamento
 const CAMPOS_LIVRES = ["rota_id", "data_entrega", "validade", "pedido_cliente", "observacao", "observacao_nfe"] as const;
 const ENCERRADOS: StatusPedido[] = ["faturado", "em_rota", "entregue", "devolvido", "cancelado"];
 
-const hoje = () => new Date().toISOString().slice(0, 10);
-const somarDias = (d: number) => new Date(Date.now() + d * 86400000).toISOString().slice(0, 10);
+const hoje = () => dataLocal();
+const somarDias = (d: number) => dataLocal(d);
 const num = (v: string | number | null | undefined) => (v === "" || v === null || v === undefined ? 0 : Number(String(v).replace(",", ".")));
 
 export function FormPedido({
