@@ -18,7 +18,8 @@ export function formatarData(v: unknown) {
     const [a, m, d] = s.split("-");
     return `${d}/${m}/${a}`;
   }
-  return new Date(s).toLocaleDateString("pt-BR");
+  // horário da empresa, para a data não virar o dia seguinte no servidor (UTC)
+  return new Date(s).toLocaleDateString("pt-BR", { timeZone: "America/Campo_Grande" });
 }
 
 export function formatarDocumento(v: unknown) {
