@@ -3,22 +3,25 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Download, FileCheck2, Plus, Printer, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, FileCheck2, Plus, Printer, Search, Truck } from "lucide-react";
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import { Badge, Button, Cabecalho, Card, Input, Select, Vazio } from "@/components/ui";
 import { cn, formatarData, formatarMoeda } from "@/lib/utils";
 import { STATUS_PEDIDO, mensagemErro, type StatusPedido } from "@/lib/pedidos";
 import { exportarExcel } from "@/components/crud/exportar";
 import { Dialogo } from "@/components/ui/Dialogo";
+import { Label } from "@/components/ui";
+import { useOpcoesCarga } from "@/components/expedicao/ListaCargas";
 
 const POR_PAGINA = 50;
 
 type Linha = {
   id: string; numero: number; tipo: "pedido" | "orcamento"; status: StatusPedido; data_emissao: string; data_entrega: string | null;
   cliente_codigo: number | null; cliente_nome: string; cliente_fantasia: string | null; vendedor_nome: string | null; rota_nome: string | null;
-  qtd_itens: number; valor_total: number; peso_total_kg: number; motivo_trava: string | null; faturado_em: string | null; gera_boleto: boolean;
+  qtd_itens: number; valor_total: number; peso_total_kg: number; motivo_trava: string | null; faturado_em: string | null; gera_boleto: boolean; rota_id: string | null;
 };
-type Selecionado = Pick<Linha, "id" | "numero" | "tipo" | "status" | "valor_total" | "faturado_em" | "gera_boleto">;
+type Selecionado = Pick<Linha, "id" | "numero" | "tipo" | "status" | "valor_total" | "faturado_em" | "gera_boleto" | "peso_total_kg"> & { rota_id?: string | null };
+type CargaAberta = { id: string; numero: number; data: string; rota_nome: string | null; motorista_nome: string | null; qtd_pedidos: number };
 type ResultadoFat = { faturados: number; boletos: number; erros: { pedido_id: string; numero: number; motivo: string }[]; ids: string[] };
 const FATURAVEL: StatusPedido[] = ["aprovado", "em_separacao", "em_rota", "entregue"];
 const LIMITE_LOTE = 150;
@@ -34,7 +37,7 @@ const FILTROS: { rotulo: string; status: StatusPedido[] | null }[] = [
   { rotulo: "Cancelados", status: ["cancelado", "devolvido"] },
 ];
 
-export function ListaPedidos({ podeCriar, podeFaturar }: { podeCriar: boolean; podeFaturar: boolean }) {
+export function ListaPedidos({ podeCriar, podeFaturar, podeMontarCarga }: { podeCriar: boolean; podeFaturar: boolean; podeMontarCarga: boolean }) {
   const router = useRouter();
   const supabase = useMemo(() => criarClienteNavegador(), []);
   const [linhas, setLinhas] = useState<Linha[]>([]);
@@ -54,6 +57,10 @@ export function ListaPedidos({ podeCriar, podeFaturar }: { podeCriar: boolean; p
   const [faturando, setFaturando] = useState(false);
   const [resultado, setResultado] = useState<ResultadoFat | null>(null);
   const [marcandoTodos, setMarcandoTodos] = useState(false);
+  const [montando, setMontando] = useState(false);
+  const [cargasAbertas, setCargasAbertas] = useState<CargaAberta[]>([]);
+  const [fc, setFc] = useState({ destino: "nova", carga_id: "", data: new Date().toISOString().slice(0, 10), rota_id: "", motorista_id: "", veiculo_id: "" });
+  const [salvandoCarga, setSalvandoCarga] = useState(false);
 
   const consulta = useCallback(
     (cols: string, contagem: boolean) => {
@@ -110,7 +117,7 @@ export function ListaPedidos({ podeCriar, podeFaturar }: { podeCriar: boolean; p
   }
   async function marcarTodosDoFiltro() {
     setMarcandoTodos(true);
-    const { data, error } = await consulta("id, numero, tipo, status, valor_total, faturado_em, gera_boleto", false)
+    const { data, error } = await consulta("id, numero, tipo, status, valor_total, faturado_em, gera_boleto, peso_total_kg, rota_id", false)
       .order("numero", { ascending: false }).limit(1000);
     setMarcandoTodos(false);
     if (error) return toast.error("Não foi possível marcar", { description: mensagemErro(error) });
@@ -121,6 +128,44 @@ export function ListaPedidos({ podeCriar, podeFaturar }: { podeCriar: boolean; p
   const totalSel = selecionados.reduce((a, l) => a + Number(l.valor_total), 0);
   const faturaveis = selecionados.filter(podeFaturarPedido);
   const comBoleto = selecionados.filter((l) => l.faturado_em && l.gera_boleto);
+
+  const paraCarga = selecionados.filter((l) => l.tipo === "pedido" && l.status === "aprovado");
+  const opcoesCarga = useOpcoesCarga();
+
+  async function abrirMontagem() {
+    const rotas = new Map<string, number>();
+    paraCarga.forEach((l) => l.rota_id && rotas.set(l.rota_id, (rotas.get(l.rota_id) ?? 0) + 1));
+    const rotaComum = [...rotas.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
+    setFc((f) => ({ ...f, destino: "nova", carga_id: "", rota_id: rotaComum }));
+    setMontando(true);
+    const { data } = await supabase.from("vw_expedicoes").select("id, numero, data, rota_nome, motorista_nome, qtd_pedidos")
+      .eq("status", "montando").order("data", { ascending: false }).limit(50);
+    setCargasAbertas((data ?? []) as CargaAberta[]);
+  }
+
+  async function montarCarga() {
+    if (!paraCarga.length) return;
+    setSalvandoCarga(true);
+    let cargaId = fc.carga_id;
+    if (fc.destino === "nova") {
+      if (!fc.data) { setSalvandoCarga(false); return toast.error("Informe a data de saída"); }
+      const { data, error } = await supabase.from("expedicoes").insert({
+        data: fc.data, rota_id: fc.rota_id || null, motorista_id: fc.motorista_id || null, veiculo_id: fc.veiculo_id || null,
+      }).select("id").single();
+      if (error) { setSalvandoCarga(false); return toast.error("Não foi possível criar a carga", { description: mensagemErro(error) }); }
+      cargaId = data.id;
+    } else if (!cargaId) {
+      setSalvandoCarga(false);
+      return toast.error("Escolha a carga");
+    }
+    const { data: n, error } = await supabase.rpc("expedicao_incluir_pedidos", { p_expedicao: cargaId, p_pedidos: paraCarga.map((l) => l.id) });
+    setSalvandoCarga(false);
+    if (error) return toast.error("Não foi possível incluir os pedidos", { description: mensagemErro(error) });
+    toast.success(`${n} ${n === 1 ? "pedido incluído" : "pedidos incluídos"} na carga, na ordem de visita dos clientes`);
+    setMontando(false);
+    setSel(new Map());
+    router.push(`/expedicao/cargas/${cargaId}`);
+  }
 
   function abrirLote(rota: string, ids: string[], param = "ids") {
     if (!ids.length) return;
@@ -280,6 +325,12 @@ export function ListaPedidos({ podeCriar, podeFaturar }: { podeCriar: boolean; p
             {comBoleto.length > 0 && (
               <Button onClick={() => abrirLote("/imprimir/boletos", comBoleto.map((l) => l.id), "pedidos")}><Printer size={16} /> Boletos ({comBoleto.length})</Button>
             )}
+            {podeMontarCarga && (
+              <Button disabled={!paraCarga.length} onClick={abrirMontagem}
+                title={!paraCarga.length ? "Só pedidos aprovados entram na rota de entrega" : undefined}>
+                <Truck size={16} /> Montar rota{paraCarga.length ? ` (${paraCarga.length})` : ""}
+              </Button>
+            )}
             {podeFaturar && (
               <Button variante="primario" disabled={!faturaveis.length} title={!faturaveis.length ? "Nenhum marcado pode ser faturado (precisa ser pedido aprovado em diante e ainda não faturado)" : undefined}
                 onClick={() => setConfirmando(true)}>
@@ -307,6 +358,49 @@ export function ListaPedidos({ podeCriar, podeFaturar }: { podeCriar: boolean; p
             <li>Pedido faturado não pode mais ser alterado pelo vendedor nem cancelado (só com estorno em Fiscal › Faturamento).</li>
             <li>Os boletos ficam aguardando o registro no Sicredi para serem impressos.</li>
           </ul>
+        </div>
+      </Dialogo>
+
+      <Dialogo aberto={montando} titulo={`Montar rota com ${paraCarga.length} ${paraCarga.length === 1 ? "pedido" : "pedidos"}`}
+        descricao="Os pedidos entram na carga na ordem de visita dos clientes. Depois você ajusta a ordem, separa e dá saída na tela da carga."
+        aoFechar={() => setMontando(false)}
+        rodape={<><Button onClick={() => setMontando(false)}>Voltar</Button><Button variante="primario" disabled={salvandoCarga} onClick={montarCarga}><Truck size={16} /> {salvandoCarga ? "Montando..." : "Montar rota"}</Button></>}>
+        <div className="space-y-3 text-sm">
+          <p className="text-muted">
+            {formatarMoeda(paraCarga.reduce((a, l) => a + Number(l.valor_total), 0))} · {paraCarga.reduce((a, l) => a + Number(l.peso_total_kg ?? 0), 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} kg
+            {paraCarga.length < sel.size && <> · {sel.size - paraCarga.length} dos marcados ficam de fora (só pedidos aprovados entram)</>}
+          </p>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-1.5"><input type="radio" name="destino" checked={fc.destino === "nova"} onChange={() => setFc({ ...fc, destino: "nova" })} className="accent-[var(--accent)]" /> Nova carga</label>
+            <label className={cn("flex items-center gap-1.5", !cargasAbertas.length && "opacity-50")}>
+              <input type="radio" name="destino" disabled={!cargasAbertas.length} checked={fc.destino === "existente"} onChange={() => setFc({ ...fc, destino: "existente", carga_id: cargasAbertas[0]?.id ?? "" })} className="accent-[var(--accent)]" />
+              Carga em montagem{cargasAbertas.length ? ` (${cargasAbertas.length})` : ""}
+            </label>
+          </div>
+          {fc.destino === "nova" ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label obrigatorio htmlFor="mc-data">Data de saída</Label><Input id="mc-data" type="date" value={fc.data} onChange={(e) => setFc({ ...fc, data: e.target.value })} /></div>
+              <div><Label htmlFor="mc-rota">Rota</Label>
+                <Select id="mc-rota" value={fc.rota_id} onChange={(e) => setFc({ ...fc, rota_id: e.target.value })}>
+                  <option value="">—</option>{opcoesCarga.rotas.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
+                </Select></div>
+              <div><Label htmlFor="mc-mot">Motorista</Label>
+                <Select id="mc-mot" value={fc.motorista_id} onChange={(e) => setFc({ ...fc, motorista_id: e.target.value })}>
+                  <option value="">—</option>{opcoesCarga.motoristas.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
+                </Select></div>
+              <div><Label htmlFor="mc-vei">Veículo</Label>
+                <Select id="mc-vei" value={fc.veiculo_id} onChange={(e) => setFc({ ...fc, veiculo_id: e.target.value })}>
+                  <option value="">—</option>{opcoesCarga.veiculos.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
+                </Select></div>
+            </div>
+          ) : (
+            <div><Label htmlFor="mc-carga">Carga</Label>
+              <Select id="mc-carga" value={fc.carga_id} onChange={(e) => setFc({ ...fc, carga_id: e.target.value })}>
+                {cargasAbertas.map((c) => (
+                  <option key={c.id} value={c.id}>Carga {c.numero} · {formatarData(c.data)}{c.rota_nome ? ` · ${c.rota_nome}` : ""}{c.motorista_nome ? ` · ${c.motorista_nome}` : ""} · {c.qtd_pedidos} pedidos</option>
+                ))}
+              </Select></div>
+          )}
         </div>
       </Dialogo>
 

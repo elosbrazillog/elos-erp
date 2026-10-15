@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle, CalendarDays, Check, ClipboardList, CloudOff, MapPin, MessageCircle, Minus, Phone, Plus, RefreshCw,
-  Repeat, Search, ShoppingCart, Target, Trash2, Users, X,
+  ChevronRight, Home, Repeat, Search, ShoppingCart, Trash2, Users, X,
 } from "lucide-react";
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import { Badge, Button, Input, Label, Select, Textarea } from "@/components/ui";
@@ -38,14 +38,17 @@ type DetalhePedido = {
 };
 type Resumo = { vendedor: string | null; vendido: number; pedidos: number; clientes_positivados: number; carteira: number; meta: number | null;
   comissao_percentual: number | null; comissao_prevista: number | null; visitas_sem_pedido: number; dias_uteis_mes: number; dias_uteis_passados: number;
-  meta_da_empresa?: boolean; vendedores?: { nome: string; meta: number | null; vendido: number; pedidos: number }[] | null };
+  meta_da_empresa?: boolean; vendedores?: { nome: string; meta: number | null; vendido: number; pedidos: number }[] | null;
+  mes_inicio: string; hoje?: string; vendido_hoje?: number; pedidos_hoje?: number; faturado?: number; faturado_hoje?: number;
+  comissao_mes?: number | null; comissao_hoje?: number | null; diario?: Diario[] };
+type Diario = { dia: string; util: boolean; vendido: number; pedidos: number };
 type Dados = { carteira: Cliente[]; produtos: Produto[]; precos: Preco[]; pedidos: PedidoResumo[]; resumo: Resumo | null; pagamentos?: Pagamentos; atualizadoEm: string };
 type Carrinho = {
   clienteId: string | null; itens: Record<string, { qtd: number; preco: number }>; obs: string; entrega: string;
   condicaoId?: string | null; formaId?: string | null; editando?: { pedidoId: string; numero: number } | null;
 };
 
-type Aba = "rota" | "clientes" | "pedido" | "pedidos" | "meta";
+type Aba = "inicio" | "rota" | "clientes" | "pedido" | "pedidos";
 const VAZIO: Carrinho = { clienteId: null, itens: {}, obs: "", entrega: "" };
 const MOTIVOS = ["Estoque ainda cheio", "Fechado", "Responsável ausente", "Sem dinheiro", "Comprou do concorrente", "Preço"];
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -58,7 +61,7 @@ export function ForcaVendas({ nome, podeCriar }: { nome: string; podeCriar: bool
   const [fila, setFila] = useState<ItemFila[]>([]);
   const [online, setOnline] = useState(true);
   const [baixando, setBaixando] = useState(false);
-  const [aba, setAba] = useState<Aba>("rota");
+  const [aba, setAba] = useState<Aba>("inicio");
   const [carrinho, setCarrinhoEstado] = useState<Carrinho>(VAZIO);
   const [naoComprou, setNaoComprou] = useState<Cliente | null>(null);
 
@@ -249,7 +252,7 @@ export function ForcaVendas({ nome, podeCriar }: { nome: string; podeCriar: bool
                 precoDe={precoDe} podeCriar={podeCriar} onEscolherCliente={() => setAba("clientes")} onEnviar={async () => { await enviarPedido(); }} />
             )}
             {aba === "pedidos" && <AbaPedidos dados={dados} fila={fila} onTentar={enviarFila} recarregar={recarregarFila} onAlterar={alterarPedido} />}
-            {aba === "meta" && <AbaMeta dados={dados} />}
+            {aba === "inicio" && <AbaInicio dados={dados} onNovoPedido={() => setAba(carrinho.clienteId ? "pedido" : "clientes")} />}
             <p className="mt-6 text-center text-[11px] text-muted">Atualizado em {new Date(dados.atualizadoEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</p>
           </>
         )}
@@ -258,8 +261,8 @@ export function ForcaVendas({ nome, podeCriar }: { nome: string; podeCriar: bool
       <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]">
         <div className="mx-auto grid max-w-xl grid-cols-5">
           {([
-            ["rota", "Rota", CalendarDays], ["clientes", "Clientes", Users], ["pedido", "Pedido", ShoppingCart],
-            ["pedidos", "Pedidos", ClipboardList], ["meta", "Meta", Target],
+            ["inicio", "Início", Home], ["rota", "Rota", CalendarDays], ["clientes", "Clientes", Users], ["pedido", "Pedido", ShoppingCart],
+            ["pedidos", "Pedidos", ClipboardList],
           ] as const).map(([k, r, I]) => (
             <button key={k} onClick={() => setAba(k)} aria-current={aba === k ? "page" : undefined}
               className={cn("relative flex flex-col items-center gap-0.5 py-2 text-[11px]", aba === k ? "text-accent" : "text-muted")}>
@@ -747,50 +750,156 @@ function AbaPedidos({ dados, fila, onTentar, recarregar, onAlterar }: {
   );
 }
 
-function AbaMeta({ dados }: { dados: Dados }) {
+// ---------------------------------------------------------------------
+function Anel({ pct }: { pct: number | null }) {
+  const r = 34, c = 2 * Math.PI * r;
+  const p = pct === null ? 0 : Math.min(1, pct / 100);
+  return (
+    <div className="relative size-[88px] shrink-0">
+      <svg viewBox="0 0 80 80" className="size-full -rotate-90" aria-hidden>
+        <circle cx="40" cy="40" r={r} fill="none" stroke="var(--surface-2)" strokeWidth="8" />
+        {p > 0 && <circle cx="40" cy="40" r={r} fill="none" stroke={p >= 1 ? "var(--ok)" : "var(--accent)"} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${c * p} ${c}`} />}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="tabular text-lg leading-none font-semibold">{pct === null ? "—" : `${Math.round(pct)}%`}</span>
+        <span className="mt-0.5 text-[10px] text-muted">da meta</span>
+      </div>
+    </div>
+  );
+}
+
+function GraficoDiario({ dias, porDia, hoje }: { dias: Diario[]; porDia: number | null; hoje: string }) {
+  const [ativo, setAtivo] = useState<string | null>(null);
+  const max = Math.max(1, porDia ?? 0, ...dias.map((d) => Number(d.vendido))) * 1.1;
+  const W = 300, H = 96, gap = 2, bw = (W - gap * (dias.length - 1)) / dias.length;
+  const sel = dias.find((d) => d.dia === (ativo ?? hoje)) ?? dias[dias.length - 1];
+  const yMeta = porDia ? H - (porDia / max) * H : null;
+  return (
+    <div>
+      <div className="mb-1.5 flex items-baseline justify-between text-xs">
+        <span className="text-muted">{sel ? `${new Date(sel.dia + "T12:00").toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" })}${sel.dia === hoje ? " · hoje" : ""}` : ""}</span>
+        <span><b className="tabular">{formatarMoeda(sel?.vendido ?? 0)}</b> <span className="text-muted">· {sel?.pedidos ?? 0} {sel?.pedidos === 1 ? "pedido" : "pedidos"}</span></span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H + 14}`} className="w-full touch-none select-none" role="img"
+        aria-label={`Vendas por dia no mês${porDia ? `, com a linha do necessário por dia útil (${formatarMoeda(porDia)})` : ""}`}
+        onPointerLeave={() => setAtivo(null)}>
+        <line x1="0" x2={W} y1={H + 0.5} y2={H + 0.5} stroke="var(--line)" />
+        {dias.map((d, i) => {
+          const v = Number(d.vendido);
+          const h = v > 0 ? Math.max(2, (v / max) * H) : 0;
+          const x = i * (bw + gap);
+          const futuro = d.dia > hoje;
+          const destaque = d.dia === (ativo ?? hoje);
+          return (
+            <g key={d.dia} onPointerEnter={() => setAtivo(d.dia)} onPointerDown={() => setAtivo(d.dia)}>
+              <rect x={x} y={0} width={bw + gap} height={H + 14} fill="transparent" />
+              {!futuro && !d.util && v === 0 ? null : (
+                <rect x={x} y={H - h} width={bw} height={h} rx={Math.min(2, bw / 2)}
+                  fill="var(--accent)" opacity={destaque ? 1 : 0.45} />
+              )}
+              {futuro && d.util && <rect x={x} y={H - 1.5} width={bw} height={1.5} fill="var(--line)" />}
+              {(i === 0 || Number(d.dia.slice(8)) % 5 === 0) && (
+                <text x={x + bw / 2} y={H + 11} textAnchor="middle" fontSize="8" fill="var(--muted)">{Number(d.dia.slice(8))}</text>
+              )}
+            </g>
+          );
+        })}
+        {yMeta !== null && <line x1="0" x2={W} y1={yMeta} y2={yMeta} stroke="var(--muted)" strokeDasharray="3 3" strokeWidth="1" opacity="0.8" />}
+      </svg>
+      {porDia ? (
+        <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted">
+          <svg width="16" height="4" aria-hidden><line x1="0" x2="16" y1="2" y2="2" stroke="var(--muted)" strokeDasharray="3 3" /></svg>
+          meta por dia útil · {formatarMoeda(porDia)}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AbaInicio({ dados, onNovoPedido }: { dados: Dados; onNovoPedido: () => void }) {
   const r = dados.resumo;
+  const [diario, setDiario] = useState(false);
   if (!r) return <p className="py-8 text-center text-sm text-muted">Sem resumo. Atualize com internet.</p>;
   const vendido = Number(r.vendido);
   const meta = r.meta ? Number(r.meta) : null;
+  const pct = meta ? (vendido / meta) * 100 : null;
   const projecao = r.dias_uteis_passados > 0 ? (vendido / r.dias_uteis_passados) * r.dias_uteis_mes : vendido;
-  const falta = meta ? Math.max(0, meta - vendido) : null;
-  const diasRestantes = Math.max(0, r.dias_uteis_mes - r.dias_uteis_passados);
-  const mes = new Date().toLocaleDateString("pt-BR", { month: "long" });
+  const restantes = Math.max(0, r.dias_uteis_mes - r.dias_uteis_passados);
+  const falta = meta ? Math.max(0, meta - vendido) : 0;
+  const porDia = meta ? meta / Math.max(1, r.dias_uteis_mes) : null;
+  const mesAno = new Date(r.mes_inicio + "T12:00").toLocaleDateString("pt-BR", { month: "2-digit", year: "numeric" });
+  const temComissao = r.comissao_percentual !== null && r.comissao_percentual !== undefined;
+  const hoje = r.hoje ?? hojeIso();
   return (
     <div className="space-y-3">
-      <h1 className="text-lg font-semibold">Resultado de {mes}</h1>
-      <div className="rounded-lg border border-line bg-surface p-4">
-        <div className="text-xs text-muted">{r.meta_da_empresa ? "Vendido no mês · empresa toda" : "Vendido no mês"}</div>
-        <div className="tabular text-2xl font-semibold">{formatarMoeda(vendido)}</div>
-        {meta ? (
-          <>
-            <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-surface-2" role="meter" aria-valuemin={0} aria-valuemax={meta} aria-valuenow={vendido} aria-label="Meta do mês">
-              <div className={cn("h-full rounded-full", vendido >= meta ? "bg-ok" : "bg-accent")} style={{ width: `${Math.min(100, (vendido / meta) * 100)}%` }} />
-            </div>
-            <div className="mt-1 flex justify-between text-xs text-muted">
-              <span>{Math.round((vendido / meta) * 100)}% da meta {r.meta_da_empresa ? "da empresa" : ""} de {formatarMoeda(meta)}</span>
-              {falta! > 0 && <span>faltam {formatarMoeda(falta)}</span>}
-            </div>
-            {falta! > 0 && diasRestantes > 0 && <p className="mt-2 text-sm">Para bater a meta: <b className="tabular">{formatarMoeda(falta! / diasRestantes)}</b> por dia útil nos {diasRestantes} dias que restam.</p>}
-          </>
-        ) : <p className="mt-1 text-xs text-muted">{r.meta_da_empresa ? "Sem meta para o mês. Lance em Vendas › Metas no sistema." : "Sem meta para o mês. Peça ao escritório para lançar."}</p>}
-        <p className="mt-2 text-xs text-muted">No ritmo atual, o mês fecha em <span className="tabular font-medium text-ink">{formatarMoeda(projecao)}</span>.</p>
-      </div>
+      <section className="rounded-lg border border-line bg-surface p-4">
+        <div className="flex items-baseline justify-between gap-2">
+          <h1 className="font-semibold">{temComissao ? "Meta e comissão" : r.meta_da_empresa ? "Meta da empresa" : "Meta"} · {mesAno}</h1>
+          {r.vendedor && <span className="truncate text-xs text-muted">{r.vendedor}</span>}
+        </div>
+        <div className="mt-3 flex items-center gap-4">
+          <Anel pct={pct} />
+          <div className="min-w-0">
+            <div className="tabular text-2xl leading-tight font-semibold">{formatarMoeda(vendido)}</div>
+            <div className="text-xs text-muted">{meta ? <>de {formatarMoeda(meta)} no mês</> : "vendido no mês"}</div>
+            {meta ? (
+              falta > 0
+                ? <div className="mt-1 text-xs">Faltam <b className="tabular">{formatarMoeda(falta)}</b>{restantes > 0 && <> · <span className="tabular">{formatarMoeda(falta / restantes)}</span>/dia útil</>}</div>
+                : <div className="mt-1 text-xs font-medium text-ok">Meta batida</div>
+            ) : <div className="mt-1 text-xs text-muted">Meta ainda não configurada.</div>}
+            <div className="mt-0.5 text-xs text-muted">No ritmo atual fecha em <span className="tabular text-ink">{formatarMoeda(projecao)}</span></div>
+          </div>
+        </div>
+        {temComissao && (
+          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-line pt-3">
+            <div><div className="text-xs text-muted">Comissão de hoje</div><div className="tabular text-lg font-semibold">{formatarMoeda(r.comissao_hoje ?? 0)}</div></div>
+            <div><div className="text-xs text-muted">Comissão no mês</div><div className="tabular text-lg font-semibold">{formatarMoeda(r.comissao_mes ?? 0)}</div></div>
+            <p className="col-span-2 -mt-1 text-[11px] text-muted">
+              {formatarNumero(r.comissao_percentual ?? 0)}% sobre vendas faturadas ({formatarMoeda(r.faturado ?? 0)} no mês).
+              {r.comissao_prevista ? <> Se tudo o que foi vendido for faturado: {formatarMoeda(r.comissao_prevista)}.</> : null}
+            </p>
+          </div>
+        )}
+        {!!r.diario?.length && (
+          <div className="mt-3 border-t border-line pt-2">
+            <button onClick={() => setDiario((v) => !v)} aria-expanded={diario} className="flex w-full items-center gap-1.5 py-1 text-sm font-medium">
+              <ChevronRight size={16} className={cn("transition-transform", diario && "rotate-90")} /> Acompanhamento diário
+            </button>
+            {diario && <div className="pt-2"><GraficoDiario dias={r.diario} porDia={porDia} hoje={hoje} /></div>}
+          </div>
+        )}
+      </section>
+
       <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-lg border border-line bg-surface p-3">
+          <div className="text-xs text-muted">Vendido hoje</div>
+          <div className="tabular text-xl font-semibold">{formatarMoeda(r.vendido_hoje ?? 0)}</div>
+          <div className="text-xs text-muted">{r.pedidos_hoje ?? 0} {r.pedidos_hoje === 1 ? "pedido" : "pedidos"}</div>
+        </div>
+        <div className="rounded-lg border border-line bg-surface p-3">
+          <div className="text-xs text-muted">No mês</div>
+          <div className="tabular text-xl font-semibold">{formatarMoeda(vendido)}</div>
+          <div className="text-xs text-muted">{r.pedidos} {r.pedidos === 1 ? "pedido" : "pedidos"}</div>
+        </div>
+      </div>
+
+      <Button variante="primario" className="h-12 w-full text-base" onClick={onNovoPedido}><ShoppingCart size={18} /> Novo pedido</Button>
+
+      <div className="grid grid-cols-3 gap-2 text-center">
         {[
-          ["Pedidos", String(r.pedidos)],
-          ["Clientes que compraram", `${r.clientes_positivados} de ${r.carteira}`],
+          ["Positivados", `${r.clientes_positivados}/${r.carteira}`],
           ["Ticket médio", r.pedidos ? formatarMoeda(vendido / r.pedidos) : "—"],
-          ["Visitas sem pedido", String(r.visitas_sem_pedido)],
+          ["Sem pedido", String(r.visitas_sem_pedido)],
         ].map(([k, v]) => (
-          <div key={k} className="rounded-lg border border-line bg-surface p-3">
-            <div className="text-xs text-muted">{k}</div>
-            <div className="tabular text-lg font-semibold">{v}</div>
+          <div key={k} className="rounded-lg border border-line bg-surface px-2 py-2.5">
+            <div className="tabular text-sm font-semibold">{v}</div>
+            <div className="text-[11px] text-muted">{k}</div>
           </div>
         ))}
       </div>
+
       {!!r.vendedores?.length && (
-        <div className="rounded-lg border border-line bg-surface">
+        <section className="rounded-lg border border-line bg-surface">
           <div className="border-b border-line px-4 py-2 text-xs font-medium text-muted">Por vendedor</div>
           <ul className="divide-y divide-line/70">
             {r.vendedores.map((v) => {
@@ -813,15 +922,9 @@ function AbaMeta({ dados }: { dados: Dados }) {
               );
             })}
           </ul>
-        </div>
+        </section>
       )}
-      {r.comissao_prevista !== null && (
-        <div className="rounded-lg border border-line bg-surface p-4">
-          <div className="text-xs text-muted">Comissão prevista ({formatarNumero(r.comissao_percentual ?? 0)}%)</div>
-          <div className="tabular text-xl font-semibold text-ok">{formatarMoeda(r.comissao_prevista)}</div>
-          <p className="text-xs text-muted">Sobre pedidos confirmados no mês. O valor final depende das entregas.</p>
-        </div>
-      )}
+      <p className="text-center text-[11px] text-muted">Vendido conta pedidos confirmados (aprovados em diante). Comissão conta o que já foi faturado.</p>
     </div>
   );
 }
