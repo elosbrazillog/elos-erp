@@ -4,6 +4,7 @@ import { CheckCircle2, Circle } from "lucide-react";
 import { criarClienteServidor } from "@/lib/supabase/server";
 import { obterSessao, pode } from "@/lib/sessao";
 import { Cabecalho, Card } from "@/components/ui";
+import { PainelInicio, type DadosPainel } from "@/components/painel/PainelInicio";
 
 export const metadata = { title: "Painel" };
 
@@ -36,36 +37,18 @@ export default async function Painel() {
   const semGrupo = (grupos as { count: number | null }).count ?? 0;
 
   // Números do dia a dia (vendas e estoque)
-  const veVendas = pode(sessao, "vendas");
   const veEstoque = pode(sessao, "estoque");
-  const veFinanceiro = pode(sessao, "financeiro");
   const hoje = dataLocal();
   const em30 = dataLocal(30);
   const conta = async (q: PromiseLike<{ count: number | null }>) => (await q).count ?? 0;
-  const somaAtraso = async () => {
-    if (!veFinanceiro) return 0;
-    const { data } = await supabase.from("vw_lancamentos").select("valor").eq("tipo", "receber").eq("situacao", "atrasado").limit(5000);
-    return ((data ?? []) as { valor: number }[]).reduce((a, l) => a + Number(l.valor), 0);
-  };
-  const [aguardando, aprovados, vencidos, vencendo, lotesComSaldo, atrasoReceber] = await Promise.all([
-    veVendas ? conta(supabase.from("pedidos").select("id", { count: "exact", head: true }).eq("status", "aguardando_credito")) : 0,
-    veVendas ? conta(supabase.from("pedidos").select("id", { count: "exact", head: true }).eq("status", "aprovado")) : 0,
+  const [painel, vencidos, vencendo, lotesComSaldo] = await Promise.all([
+    supabase.rpc("painel_resumo"),
     veEstoque ? conta(supabase.from("vw_estoque").select("id", { count: "exact", head: true }).gt("quantidade", 0).lt("validade", hoje)) : 0,
     veEstoque ? conta(supabase.from("vw_estoque").select("id", { count: "exact", head: true }).gt("quantidade", 0).gte("validade", hoje).lte("validade", em30)) : 0,
     veEstoque ? conta(supabase.from("vw_estoque").select("id", { count: "exact", head: true }).gt("quantidade", 0)) : 0,
-    somaAtraso(),
   ]);
-  const operacao: { r: string; v: number | string; h: string; alerta: boolean }[] = [
-    ...(veFinanceiro ? [{ r: "A receber em atraso", v: atrasoReceber.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }), h: "/financeiro/lancamentos", alerta: atrasoReceber > 0 }] : []),
-    ...(veVendas ? [
-      { r: "Aguardando crédito", v: aguardando, h: "/vendas/credito", alerta: aguardando > 0 },
-      { r: "Pedidos aprovados", v: aprovados, h: "/vendas/pedidos", alerta: false },
-    ] : []),
-    ...(veEstoque ? [
-      { r: "Lotes vencidos", v: vencidos, h: "/estoque/saldos", alerta: vencidos > 0 },
-      { r: "Vencem em 30 dias", v: vencendo, h: "/estoque/saldos", alerta: false },
-    ] : []),
-  ];
+  const dados = (painel.data ?? {}) as DadosPainel;
+  const validade = veEstoque && (vencidos > 0 || vencendo > 0);
 
   const etapas = [
     { feito: !!emp && emp.cnpj !== "00000000000000" && !!emp.inscricao_estadual && !!emp.cep, texto: "Completar CNPJ, inscrição estadual e endereço da empresa", rota: "/configuracoes/empresa" },
@@ -82,36 +65,21 @@ export default async function Painel() {
   return (
     <>
       <Cabecalho trilha={sessao.empresaNome} titulo={`Olá, ${sessao.nome.split(" ")[0]}`} />
-      {operacao.length > 0 && (
-        <div className="mb-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {operacao.map((o) => (
-            <Link key={o.r} href={o.h}>
+      <PainelInicio d={dados} />
+      {validade && (
+        <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[["Lotes vencidos", vencidos, vencidos > 0], ["Vencem em 30 dias", vencendo, false]].map(([r, v, alerta]) => (
+            <Link key={String(r)} href="/estoque/saldos">
               <Card className="p-4 transition-colors hover:border-accent">
-                <div className="text-xs text-muted">{o.r}</div>
-                <div className={`tabular mt-1 text-2xl font-semibold ${o.alerta ? "text-warn" : ""}`}>{o.v}</div>
+                <div className="text-xs text-muted">{r}</div>
+                <div className={`tabular mt-1 text-xl font-semibold ${alerta ? "text-warn" : ""}`}>{String(v)}</div>
               </Card>
             </Link>
           ))}
         </div>
       )}
-      {veCadastros && (
-        <>
-          <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {[
-              ["Clientes ativos", clientes, "/cadastros/pessoas"],
-              ["Produtos ativos", produtos, "/cadastros/produtos"],
-              ["Rotas", rotas, "/cadastros/rotas"],
-              ["Vendedores", vendedores, "/cadastros/pessoas"],
-            ].map(([r, v, h]) => (
-              <Link key={String(r)} href={String(h)}>
-                <Card className="p-4 transition-colors hover:border-accent">
-                  <div className="text-xs text-muted">{r}</div>
-                  <div className="tabular mt-1 text-2xl font-semibold">{String(v)}</div>
-                </Card>
-              </Link>
-            ))}
-          </div>
-          <Card className="max-w-2xl">
+      {veCadastros && feitas < etapas.length && (
+          <Card className="mt-3 max-w-2xl">
             <div className="flex items-center justify-between border-b border-line p-4">
               <div>
                 <div className="font-medium">Implantação do sistema</div>
@@ -130,9 +98,8 @@ export default async function Painel() {
               ))}
             </ul>
           </Card>
-        </>
       )}
-      {!veCadastros && <p className="text-sm text-muted">Use o menu para acessar suas telas.</p>}
+      {Object.keys(dados).length === 0 && !veCadastros && <p className="text-sm text-muted">Use o menu para acessar suas telas.</p>}
     </>
   );
 }
