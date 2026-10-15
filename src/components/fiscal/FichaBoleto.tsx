@@ -1,4 +1,5 @@
 import { formatarData, formatarDocumento, formatarMoeda } from "@/lib/utils";
+import qrcode from "qrcode-generator";
 import { barrasItf, DV_BANCO, formatarLinhaDigitavel, larguraItf, NOME_BANCO } from "@/lib/boleto";
 
 export type Boleto = {
@@ -15,7 +16,7 @@ export type Boleto = {
 
 export const EXEMPLO: Boleto = {
   id: "exemplo", status: "registrado", nosso_numero: "26/200001-7", linha_digitavel: "74891121110000100000000000000001000000000000000",
-  codigo_barras: "74891000000000000001121110000100000000000000", pix_copia_cola: null, erro: null, pedido_numero: 123,
+  codigo_barras: "74891000000000000001121110000100000000000000", pix_copia_cola: "00020101021226870014br.gov.bcb.pix2565qrpix.sicredi.com.br/qr/v2/cobv/EXEMPLO0000000000000000000000005204000053039865802BR5925ELOS EXEMPLO6012CAMPO GRANDE62070503***6304ABCD", erro: null, pedido_numero: 123,
   valor: 0, data_vencimento: new Date().toISOString().slice(0, 10), data_competencia: new Date().toISOString().slice(0, 10), documento: "123",
   parcela: 1, total_parcelas: 1, data_quitacao: null, pagador_nome: "CLIENTE DE EXEMPLO", pagador_documento: "00000000000000",
   pagador_logradouro: "Rua Exemplo", pagador_numero: "100", pagador_complemento: null, pagador_bairro: "Centro", pagador_cidade: "Campo Grande",
@@ -24,6 +25,22 @@ export const EXEMPLO: Boleto = {
 };
 
 const formatarPct = (v: number | null | undefined) => `${Number(v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 3 })}%`;
+
+// QR Code do Pix (boleto híbrido): um caminho SVG com os módulos escuros
+function QrPix({ texto }: { texto: string }) {
+  const qr = qrcode(0, "M");
+  qr.addData(texto);
+  qr.make();
+  const n = qr.getModuleCount();
+  let d = "";
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) d += `M${c + 4} ${r + 4}h1v1h-1z`;
+  return (
+    <svg viewBox={`0 0 ${n + 8} ${n + 8}`} style={{ width: "24mm", height: "24mm" }} role="img" aria-label="QR Code Pix" shapeRendering="crispEdges">
+      <rect width={n + 8} height={n + 8} fill="#fff" />
+      <path d={d} fill="#000" />
+    </svg>
+  );
+}
 
 function CodigoBarras({ codigo }: { codigo: string }) {
   const barras = barrasItf(codigo);
@@ -131,7 +148,14 @@ export function FichaBoleto({ b, exemplo }: { b: Boleto; exemplo?: boolean }) {
         <div className="text-right text-[8px]">Autenticação mecânica · Ficha de compensação</div>
       </div>
       {b.pix_copia_cola && (
-        <div className="mt-1 text-[8px] break-all"><b>PIX copia e cola:</b> {b.pix_copia_cola}</div>
+        <div className="mt-2 flex items-center gap-3 border border-black p-1.5">
+          <QrPix texto={b.pix_copia_cola} />
+          <div className="min-w-0 text-[8px]">
+            <div className="mb-0.5 text-[10px] font-bold">Pague com Pix</div>
+            <div className="mb-1">Aponte a câmera do app do banco para o QR Code ou use o código abaixo (Pix copia e cola).</div>
+            <div className="font-mono break-all">{b.pix_copia_cola}</div>
+          </div>
+        </div>
       )}
     </section>
   );
