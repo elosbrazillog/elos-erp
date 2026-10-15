@@ -42,7 +42,11 @@ type Resumo = { vendedor: string | null; vendido: number; pedidos: number; clien
   mes_inicio: string; hoje?: string; vendido_hoje?: number; pedidos_hoje?: number; faturado?: number; faturado_hoje?: number;
   comissao_mes?: number | null; comissao_hoje?: number | null; diario?: Diario[] };
 type Diario = { dia: string; util: boolean; vendido: number; pedidos: number };
-type Dados = { carteira: Cliente[]; produtos: Produto[]; precos: Preco[]; pedidos: PedidoResumo[]; resumo: Resumo | null; pagamentos?: Pagamentos; atualizadoEm: string };
+type MesComissao = { competencia: string; valor: number; base: number; pedidos: number; vencimento: string; pago_em: string | null };
+type Comissoes = { percentual: number | null; dia_pagamento: number; mes_valor: number; mes_base: number; mes_pedidos: number; hoje_valor: number;
+  a_receber: number; proximo_pagamento: string; recebido_ano: number; historico: MesComissao[]; por_vendedor: { nome: string; valor: number; pedidos: number }[] | null };
+type Dados = { carteira: Cliente[]; produtos: Produto[]; precos: Preco[]; pedidos: PedidoResumo[]; resumo: Resumo | null; pagamentos?: Pagamentos;
+  comissoes?: Comissoes | null; atualizadoEm: string };
 type Carrinho = {
   clienteId: string | null; itens: Record<string, { qtd: number; preco: number }>; obs: string; entrega: string;
   condicaoId?: string | null; formaId?: string | null; editando?: { pedidoId: string; numero: number } | null;
@@ -79,7 +83,7 @@ export function ForcaVendas({ nome, podeCriar }: { nome: string; podeCriar: bool
     if (!navigator.onLine) { if (!silencioso) toast.info("Sem sinal. Usando os dados guardados no aparelho."); return; }
     setBaixando(true);
     const desde = new Date(Date.now() - 90 * 864e5).toISOString();
-    const [c, p, pr, pe, re, pg] = await Promise.all([
+    const [c, p, pr, pe, re, pg, co] = await Promise.all([
       supabase.rpc("app_carteira"),
       supabase.rpc("app_produtos"),
       supabase.from("tabelas_preco_itens").select("tabela_preco_id, produto_id, preco, preco_minimo").eq("ativo", true).limit(20000),
@@ -87,6 +91,7 @@ export function ForcaVendas({ nome, podeCriar }: { nome: string; podeCriar: bool
         .eq("tipo", "pedido").eq("ativo", true).gte("data_emissao", desde).order("numero", { ascending: false }).limit(500),
       supabase.rpc("app_resumo"),
       supabase.rpc("app_pagamentos"),
+      supabase.rpc("app_comissoes"),
     ]);
     setBaixando(false);
     const erro = c.error ?? p.error ?? pr.error ?? pe.error ?? re.error ?? pg.error;
@@ -94,7 +99,8 @@ export function ForcaVendas({ nome, podeCriar }: { nome: string; podeCriar: bool
     const novo: Dados = {
       carteira: (c.data ?? []) as Cliente[], produtos: (p.data ?? []) as Produto[], precos: (pr.data ?? []) as Preco[],
       pedidos: (pe.data ?? []) as PedidoResumo[], resumo: (re.data ?? null) as Resumo | null,
-      pagamentos: (pg.data ?? { condicoes: [], formas: [] }) as Pagamentos, atualizadoEm: new Date().toISOString(),
+      pagamentos: (pg.data ?? { condicoes: [], formas: [] }) as Pagamentos,
+      comissoes: co.error ? null : ((co.data ?? null) as Comissoes | null), atualizadoEm: new Date().toISOString(),
     };
     setDados(novo);
     await kvSet("dados", novo);
@@ -828,7 +834,8 @@ function AbaInicio({ dados, onNovoPedido }: { dados: Dados; onNovoPedido: () => 
   const falta = meta ? Math.max(0, meta - vendido) : 0;
   const porDia = meta ? meta / Math.max(1, r.dias_uteis_mes) : null;
   const mesAno = new Date(r.mes_inicio + "T12:00").toLocaleDateString("pt-BR", { month: "2-digit", year: "numeric" });
-  const temComissao = r.comissao_percentual !== null && r.comissao_percentual !== undefined;
+  const c = dados.comissoes ?? null;
+  const temComissao = !!c || (r.comissao_percentual !== null && r.comissao_percentual !== undefined);
   const hoje = r.hoje ?? hojeIso();
   return (
     <div className="space-y-3">
@@ -850,14 +857,10 @@ function AbaInicio({ dados, onNovoPedido }: { dados: Dados; onNovoPedido: () => 
             <div className="mt-0.5 text-xs text-muted">No ritmo atual fecha em <span className="tabular text-ink">{formatarMoeda(projecao)}</span></div>
           </div>
         </div>
-        {temComissao && (
+        {temComissao && !c && (
           <div className="mt-4 grid grid-cols-2 gap-3 border-t border-line pt-3">
             <div><div className="text-xs text-muted">Comissão de hoje</div><div className="tabular text-lg font-semibold">{formatarMoeda(r.comissao_hoje ?? 0)}</div></div>
             <div><div className="text-xs text-muted">Comissão no mês</div><div className="tabular text-lg font-semibold">{formatarMoeda(r.comissao_mes ?? 0)}</div></div>
-            <p className="col-span-2 -mt-1 text-[11px] text-muted">
-              {formatarNumero(r.comissao_percentual ?? 0)}% sobre vendas faturadas ({formatarMoeda(r.faturado ?? 0)} no mês).
-              {r.comissao_prevista ? <> Se tudo o que foi vendido for faturado: {formatarMoeda(r.comissao_prevista)}.</> : null}
-            </p>
           </div>
         )}
         {!!r.diario?.length && (
@@ -869,6 +872,8 @@ function AbaInicio({ dados, onNovoPedido }: { dados: Dados; onNovoPedido: () => 
           </div>
         )}
       </section>
+
+      {c && <CardGanhos c={c} />}
 
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-line bg-surface p-3">
@@ -926,5 +931,84 @@ function AbaInicio({ dados, onNovoPedido }: { dados: Dados; onNovoPedido: () => 
       )}
       <p className="text-center text-[11px] text-muted">Vendido conta pedidos confirmados (aprovados em diante). Comissão conta o que já foi faturado.</p>
     </div>
+  );
+}
+
+function mesNome(iso: string, longo = false) {
+  return new Date(iso.slice(0, 10) + "T12:00").toLocaleDateString("pt-BR", { month: longo ? "long" : "short", year: longo ? undefined : "2-digit" }).replace(".", "");
+}
+
+function CardGanhos({ c }: { c: Comissoes }) {
+  const [hist, setHist] = useState(false);
+  const pct = formatarNumero(Number(c.percentual ?? 0));
+  const hoje = hojeIso();
+  const maior = Math.max(1, ...c.historico.map((h) => Math.abs(Number(h.valor))));
+  return (
+    <section className="rounded-lg border border-line bg-surface p-4">
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="font-semibold">Seus ganhos</h2>
+        <span className="text-xs text-muted">{pct}% sobre faturado · paga dia {c.dia_pagamento}</span>
+      </div>
+      <div className="mt-3">
+        <div className="text-xs text-muted">Comissão de {mesNome(hoje, true)}</div>
+        <div className="tabular text-2xl leading-tight font-semibold text-ok">{formatarMoeda(Number(c.mes_valor))}</div>
+        <div className="text-xs text-muted">
+          sobre {formatarMoeda(Number(c.mes_base))} faturados · {c.mes_pedidos} {Number(c.mes_pedidos) === 1 ? "pedido" : "pedidos"}
+          {Number(c.hoje_valor) ? <> · <span className="text-ink">+{formatarMoeda(Number(c.hoje_valor))} hoje</span></> : null}
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3 border-t border-line pt-3">
+        <div>
+          <div className="text-xs text-muted">A receber</div>
+          <div className="tabular text-lg font-semibold">{formatarMoeda(Number(c.a_receber))}</div>
+          <div className="text-[11px] text-muted">próximo pagamento {formatarData(c.proximo_pagamento)}</div>
+        </div>
+        <div>
+          <div className="text-xs text-muted">Recebido no ano</div>
+          <div className="tabular text-lg font-semibold">{formatarMoeda(Number(c.recebido_ano))}</div>
+        </div>
+      </div>
+      {!!c.historico.length && (
+        <div className="mt-3 border-t border-line pt-2">
+          <button onClick={() => setHist((v) => !v)} aria-expanded={hist} className="flex w-full items-center gap-1.5 py-1 text-sm font-medium">
+            <ChevronRight size={16} className={cn("transition-transform", hist && "rotate-90")} /> Últimos meses
+          </button>
+          {hist && (
+            <ul className="mt-1 space-y-2">
+              {c.historico.map((h) => {
+                const v = Number(h.valor);
+                const atual = h.competencia.slice(0, 7) === hoje.slice(0, 7);
+                return (
+                  <li key={h.competencia}>
+                    <div className="flex items-baseline justify-between gap-2 text-sm">
+                      <span className="capitalize">{mesNome(h.competencia)}</span>
+                      <span className="tabular font-medium">{formatarMoeda(v)}</span>
+                    </div>
+                    <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-surface-2">
+                      <div className={cn("h-full rounded-full", h.pago_em ? "bg-ok" : "bg-accent/60")} style={{ width: `${Math.max(2, (Math.abs(v) / maior) * 100)}%` }} />
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-muted">
+                      {h.pedidos} {Number(h.pedidos) === 1 ? "pedido" : "pedidos"} ·{" "}
+                      {h.pago_em ? <span className="text-ok">pago em {formatarData(h.pago_em)}</span>
+                        : atual ? <>em aberto · paga {formatarData(h.vencimento)}</> : <>a receber {formatarData(h.vencimento)}</>}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+      {!!c.por_vendedor?.length && (
+        <ul className="mt-3 divide-y divide-line/70 border-t border-line pt-1">
+          {c.por_vendedor.map((v) => (
+            <li key={v.nome} className="flex justify-between gap-2 py-1.5 text-sm">
+              <span className="truncate">{v.nome} <span className="text-xs text-muted">· {v.pedidos} ped.</span></span>
+              <span className="tabular shrink-0">{formatarMoeda(Number(v.valor))}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
