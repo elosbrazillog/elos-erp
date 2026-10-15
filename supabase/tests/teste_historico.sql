@@ -10,16 +10,16 @@ do $$ declare r jsonb; antes numeric; cli uuid := (select id from pessoas where 
     jsonb_build_object('pedido', '9001', 'linha', 2, 'status', 'Pedido Faturado', 'data', current_date, 'quantidade', 1, 'preco', 5, 'total', 5,
       'documento', '67807267000166', 'cliente', 'Cliente Livre', 'vendedor', 'JOÃO', 'produto_codigo', 'XX', 'produto_nome', 'Outro'),
     jsonb_build_object('pedido', '9002', 'linha', 1, 'status', 'Pedido Nao Faturado', 'quantidade', 1, 'preco', 7, 'total', 7, 'cliente', 'Fulano')));
-  assert (r->>'linhas')::int = 3 and (r->>'pedidos')::int = 2, r::text;
+  assert (r->>'linhas')::int = 2 and (r->>'pedidos')::int = 2 and (r->>'ignoradas')::int = 1, r::text;
   assert (select count(*) from vendas_historico where pedido_codigo = '9001' and cliente_id = cli) = 2, 'cliente ligado pelo CNPJ';
   assert (select produto_id from vendas_historico where pedido_codigo = '9001' and linha = 1) = (select id from produtos where codigo = 'EMP1');
-  assert not (select faturado from vendas_historico where pedido_codigo = '9002');
+  assert not exists (select 1 from vendas_historico where pedido_codigo = '9002'), 'não faturado fica de fora';
   -- reimportar substitui
   perform historico_importar(jsonb_build_array(jsonb_build_object('pedido', '9001', 'linha', 1, 'status', 'Pedido Faturado', 'data', current_date,
       'quantidade', 3, 'preco', 10, 'total', 30, 'documento', '67807267000166', 'cliente', 'Cliente Livre', 'vendedor', 'JOÃO', 'produto_codigo', 'EMP1')));
   assert (select count(*) from vendas_historico where pedido_codigo = '9001') = 1;
   r := historico_resumo(current_date - 30, current_date);
-  assert (r->>'total')::numeric = 30 and (r->>'pedidos')::int = 1 and (r->>'nao_faturados')::int = 1, r::text;
+  assert (r->>'total')::numeric = 30 and (r->>'pedidos')::int = 1 and (r->>'nao_faturados')::int = 0, r::text;
   assert (select vendido from metas_mes(current_date) where vendedor_nome = 'João Vendedor') = coalesce(antes, 0) + 30, 'histórico conta na meta';
   assert (select ultimo_pedido_numero from app_carteira() where id = cli) = 9001 or
          (select ultimo_pedido_data from app_carteira() where id = cli) >= current_date, 'último pedido';
